@@ -267,4 +267,4 @@ CoreUI is an MIT-licensed open source project and is completely free to use. How
 
 copyright 2025 creativeLabs Łukasz Holeczek.   
 
-Code released under [the MIT license](https://github.com/coreui/coreui-free-react-admin-template/blob/main/LICENSE).
+Code released under [the MIT license](https://github.com/coreui/coreui-free-react-admin-template/blob/main/LICENSE)."# jevon-frontend" 
