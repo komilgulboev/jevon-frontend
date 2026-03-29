@@ -1,0 +1,41 @@
+{
+  "nav": {
+    "main":        "Главное",
+    "dashboard":   "Дашборд",
+    "projects":    "Проекты",
+    "tasks":       "Задачи",
+    "management":  "Управление",
+    "employees":   "Сотрудники",
+    "system":      "Система",
+    "settings":    "Настройки"
+  },
+  "login": {
+    "title":           "Вход",
+    "subtitle":        "Войдите в свой аккаунт",
+    "email":           "Email",
+    "password":        "Пароль",
+    "submit":          "Войти",
+    "submitting":      "Вход...",
+    "forgot":          "Забыли пароль?",
+    "error_invalid":   "Неверный email или пароль",
+    "error_generic":   "Ошибка входа. Попробуйте снова.",
+    "brand_title":     "Jevon CRM",
+    "brand_desc":      "Система управления мебельным производством. Контролируйте проекты, задачи и команду в одном месте.",
+    "role_admin":      "Администратор",
+    "role_supervisor": "Супервайзер",
+    "role_master":     "Мастер",
+    "role_assistant":  "Ассистент"
+  },
+  "common": {
+    "loading":  "Загрузка...",
+    "save":     "Сохранить",
+    "cancel":   "Отмена",
+    "delete":   "Удалить",
+    "edit":     "Редактировать",
+    "create":   "Создать",
+    "search":   "Поиск...",
+    "actions":  "Действия",
+    "yes":      "Да",
+    "no":       "Нет"
+  }
+}

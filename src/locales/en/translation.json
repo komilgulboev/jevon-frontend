@@ -1,0 +1,41 @@
+{
+  "nav": {
+    "main":        "Main",
+    "dashboard":   "Dashboard",
+    "projects":    "Projects",
+    "tasks":       "Tasks",
+    "management":  "Management",
+    "employees":   "Employees",
+    "system":      "System",
+    "settings":    "Settings"
+  },
+  "login": {
+    "title":           "Login",
+    "subtitle":        "Sign in to your account",
+    "email":           "Email",
+    "password":        "Password",
+    "submit":          "Sign In",
+    "submitting":      "Signing in...",
+    "forgot":          "Forgot password?",
+    "error_invalid":   "Invalid email or password",
+    "error_generic":   "Login failed. Please try again.",
+    "brand_title":     "Jevon CRM",
+    "brand_desc":      "Furniture workshop management system. Control your projects, tasks and team in one place.",
+    "role_admin":      "Administrator",
+    "role_supervisor": "Supervisor",
+    "role_master":     "Master",
+    "role_assistant":  "Assistant"
+  },
+  "common": {
+    "loading":  "Loading...",
+    "save":     "Save",
+    "cancel":   "Cancel",
+    "delete":   "Delete",
+    "edit":     "Edit",
+    "create":   "Create",
+    "search":   "Search...",
+    "actions":  "Actions",
+    "yes":      "Yes",
+    "no":       "No"
+  }
+}

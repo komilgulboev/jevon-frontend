@@ -1,27 +1,6 @@
-/**
- * AppSidebar Component
- *
- * Collapsible navigation sidebar with branding, menu items, and toggle controls.
- *
- * Features:
- * - Redux-controlled visibility state
- * - Unfoldable/narrow mode for more screen space
- * - Brand logo with full and narrow variants
- * - Close button for mobile devices
- * - Footer with toggle button
- * - Dark color scheme
- * - Fixed positioning
- *
- * @component
- * @example
- * return (
- *   <AppSidebar />
- * )
- */
-
 import React from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-
+import { useTranslation } from 'react-i18next'
 import {
   CCloseButton,
   CSidebar,
@@ -31,31 +10,44 @@ import {
   CSidebarToggler,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-
 import { AppSidebarNav } from './AppSidebarNav'
-
 import { logo } from 'src/assets/brand/logo'
 import { sygnet } from 'src/assets/brand/sygnet'
-
-// sidebar nav config
+import { useAuth } from '../AuthContext'
 import navigation from '../_nav'
 
-/**
- * AppSidebar functional component
- *
- * Manages sidebar state with Redux:
- * - sidebarShow: Controls sidebar visibility
- * - sidebarUnfoldable: Controls narrow/wide mode
- *
- * Renders navigation from _nav.js configuration file.
- * Memoized to prevent unnecessary re-renders.
- *
- * @returns {React.ReactElement} Sidebar with navigation
- */
 const AppSidebar = () => {
-  const dispatch = useDispatch()
+  const dispatch   = useDispatch()
   const unfoldable = useSelector((state) => state.sidebarUnfoldable)
   const sidebarShow = useSelector((state) => state.sidebarShow)
+  const { t }      = useTranslation()
+  const { user, hasRole } = useAuth()
+
+  // Фильтруем пункты меню по роли
+  const filteredNav = navigation.filter((item) => {
+    if (!item.roles) return true          // нет ограничений — показываем всем
+    return hasRole(...item.roles)         // проверяем роль
+  })
+
+  // Переводим названия пунктов меню
+const translatedNav = filteredNav.map((item) => {
+  const { _i18n, roles, ...cleanItem } = item   // убираем _i18n и roles из объекта
+  return {
+    ...cleanItem,
+    name: item._i18n ? t(item.name) : item.name,
+    ...(item.items && {
+      items: item.items
+        .filter((sub) => !sub.roles || hasRole(...sub.roles))
+        .map((sub) => {
+          const { _i18n: subI18n, roles: subRoles, ...cleanSub } = sub
+          return {
+            ...cleanSub,
+            name: sub._i18n ? t(sub.name) : sub.name,
+          }
+        }),
+    }),
+  }
+})
 
   return (
     <CSidebar
@@ -79,7 +71,9 @@ const AppSidebar = () => {
           onClick={() => dispatch({ type: 'set', sidebarShow: false })}
         />
       </CSidebarHeader>
-      <AppSidebarNav items={navigation} />
+
+      <AppSidebarNav items={translatedNav} />
+
       <CSidebarFooter className="border-top d-none d-lg-flex">
         <CSidebarToggler
           onClick={() => dispatch({ type: 'set', sidebarUnfoldable: !unfoldable })}

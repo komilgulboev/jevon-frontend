@@ -1,175 +1,112 @@
-/**
- * AppHeader Component
- *
- * Main application header with navigation, theme switcher, and user menu.
- * Features include:
- * - Sidebar toggle button
- * - Primary navigation links
- * - Notification and action icons
- * - Theme switcher (light/dark/auto)
- * - User dropdown menu
- * - Breadcrumb navigation
- * - Sticky positioning with scroll shadow effect
- *
- * @component
- * @example
- * return (
- *   <AppHeader />
- * )
- */
-
-import React, { useEffect, useRef } from 'react'
-import { NavLink } from 'react-router-dom'
+import { useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+import { NavLink, useNavigate } from 'react-router-dom'
 import {
   CContainer,
-  CDropdown,
-  CDropdownItem,
-  CDropdownMenu,
-  CDropdownToggle,
   CHeader,
   CHeaderNav,
   CHeaderToggler,
-  CNavLink,
-  CNavItem,
-  useColorModes,
+  CDropdown,
+  CDropdownToggle,
+  CDropdownMenu,
+  CDropdownItem,
+  CDropdownDivider,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import {
-  cilBell,
-  cilContrast,
-  cilEnvelopeOpen,
-  cilList,
-  cilMenu,
-  cilMoon,
-  cilSun,
-} from '@coreui/icons'
+import { cilMenu, cilAccountLogout, cilSettings } from '@coreui/icons'
 
-import { AppBreadcrumb } from './index'
-import { AppHeaderDropdown } from './header/index'
+import LanguageSwitcher from './LanguageSwitcher'
+import { useAuth } from '../AuthContext'
 
-/**
- * AppHeader functional component
- *
- * Manages header UI including:
- * - Redux integration for sidebar state
- * - Theme management with CoreUI useColorModes hook
- * - Scroll-based shadow effect
- * - Responsive navigation
- *
- * @returns {React.ReactElement} Header component with navigation and controls
- */
-const AppHeader = () => {
-  const headerRef = useRef()
-  const { colorMode, setColorMode } = useColorModes('coreui-free-react-admin-template-theme')
+export default function AppHeader() {
+  const dispatch   = useDispatch()
+  const navigate   = useNavigate()
+  const { user, logout } = useAuth()
+  const headerRef  = useRef()
 
-  const dispatch = useDispatch()
   const sidebarShow = useSelector((state) => state.sidebarShow)
 
-  useEffect(() => {
-    const handleScroll = () => {
-      headerRef.current &&
-        headerRef.current.classList.toggle('shadow-sm', document.documentElement.scrollTop > 0)
-    }
+  const handleLogout = async () => {
+    await logout()
+    navigate('/login')
+  }
 
-    document.addEventListener('scroll', handleScroll)
-    return () => document.removeEventListener('scroll', handleScroll)
-  }, [])
+  // Инициалы для аватара
+  const initials = user?.full_name
+    ?.split(' ')
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'U'
 
   return (
     <CHeader position="sticky" className="mb-4 p-0" ref={headerRef}>
-      <CContainer className="border-bottom px-4" fluid>
+      <CContainer fluid className="border-bottom px-4">
+
+        {/* Кнопка toggle сайдбара */}
         <CHeaderToggler
           onClick={() => dispatch({ type: 'set', sidebarShow: !sidebarShow })}
           style={{ marginInlineStart: '-14px' }}
         >
           <CIcon icon={cilMenu} size="lg" />
         </CHeaderToggler>
-        <CHeaderNav className="d-none d-md-flex">
-          <CNavItem>
-            <CNavLink to="/dashboard" as={NavLink}>
-              Dashboard
-            </CNavLink>
-          </CNavItem>
-          <CNavItem>
-            <CNavLink href="#">Users</CNavLink>
-          </CNavItem>
-          <CNavItem>
-            <CNavLink href="#">Settings</CNavLink>
-          </CNavItem>
-        </CHeaderNav>
-        <CHeaderNav className="ms-auto">
-          <CNavItem>
-            <CNavLink href="#">
-              <CIcon icon={cilBell} size="lg" />
-            </CNavLink>
-          </CNavItem>
-          <CNavItem>
-            <CNavLink href="#">
-              <CIcon icon={cilList} size="lg" />
-            </CNavLink>
-          </CNavItem>
-          <CNavItem>
-            <CNavLink href="#">
-              <CIcon icon={cilEnvelopeOpen} size="lg" />
-            </CNavLink>
-          </CNavItem>
-        </CHeaderNav>
-        <CHeaderNav>
-          <li className="nav-item py-1">
-            <div className="vr h-100 mx-2 text-body text-opacity-75"></div>
-          </li>
-          <CDropdown variant="nav-item" placement="bottom-end">
-            <CDropdownToggle caret={false}>
-              {colorMode === 'dark' ? (
-                <CIcon icon={cilMoon} size="lg" />
-              ) : colorMode === 'auto' ? (
-                <CIcon icon={cilContrast} size="lg" />
-              ) : (
-                <CIcon icon={cilSun} size="lg" />
-              )}
+
+        {/* Правая часть хедера */}
+        <CHeaderNav className="ms-auto gap-1">
+
+          {/* ── Переключатель языка ── */}
+          <LanguageSwitcher />
+
+          {/* ── Меню пользователя ── */}
+          <CDropdown variant="nav-item">
+            <CDropdownToggle
+              className="d-flex align-items-center gap-2 py-0"
+              caret={false}
+            >
+              <div
+                className="rounded-circle d-flex align-items-center justify-content-center fw-semibold"
+                style={{
+                  width: 32, height: 32, fontSize: 12,
+                  background: 'var(--cui-primary)',
+                  color: 'white',
+                  flexShrink: 0,
+                }}
+              >
+                {initials}
+              </div>
+              <span className="d-none d-md-inline small fw-medium">
+                {user?.full_name}
+              </span>
             </CDropdownToggle>
-            <CDropdownMenu>
+
+            <CDropdownMenu className="pt-0">
               <CDropdownItem
-                active={colorMode === 'light'}
-                className="d-flex align-items-center"
-                as="button"
-                type="button"
-                onClick={() => setColorMode('light')}
+                className="text-body-secondary small py-2 px-3"
+                style={{ cursor: 'default' }}
               >
-                <CIcon className="me-2" icon={cilSun} size="lg" /> Light
+                {user?.role_name}
+              </CDropdownItem>
+              <CDropdownDivider />
+              <CDropdownItem
+                onClick={() => navigate('/settings')}
+                style={{ cursor: 'pointer' }}
+              >
+                <CIcon icon={cilSettings} className="me-2" />
+                Настройки
               </CDropdownItem>
               <CDropdownItem
-                active={colorMode === 'dark'}
-                className="d-flex align-items-center"
-                as="button"
-                type="button"
-                onClick={() => setColorMode('dark')}
+                onClick={handleLogout}
+                className="text-danger"
+                style={{ cursor: 'pointer' }}
               >
-                <CIcon className="me-2" icon={cilMoon} size="lg" /> Dark
-              </CDropdownItem>
-              <CDropdownItem
-                active={colorMode === 'auto'}
-                className="d-flex align-items-center"
-                as="button"
-                type="button"
-                onClick={() => setColorMode('auto')}
-              >
-                <CIcon className="me-2" icon={cilContrast} size="lg" /> Auto
+                <CIcon icon={cilAccountLogout} className="me-2" />
+                Выйти
               </CDropdownItem>
             </CDropdownMenu>
           </CDropdown>
-          <li className="nav-item py-1">
-            <div className="vr h-100 mx-2 text-body text-opacity-75"></div>
-          </li>
-          <AppHeaderDropdown />
+
         </CHeaderNav>
-      </CContainer>
-      <CContainer className="px-4" fluid>
-        <AppBreadcrumb />
       </CContainer>
     </CHeader>
   )
 }
-
-export default AppHeader
