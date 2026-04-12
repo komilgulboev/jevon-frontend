@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { CButton, CSpinner, CAlert, CBadge } from '@coreui/react'
+import {
+  CButton, CSpinner, CAlert, CBadge,
+  CModal, CModalHeader, CModalTitle, CModalBody, CModalFooter,
+  CFormInput, CInputGroup, CInputGroupText,
+  CTable, CTableHead, CTableBody, CTableRow,
+  CTableHeaderCell, CTableDataCell,
+} from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilPlus, cilSave, cilPrint } from '@coreui/icons'
+import { cilPlus, cilSave, cilPrint, cilSearch, cilClipboard } from '@coreui/icons'
 import api from '../api/client'
 
 const SERVICE_UNITS  = ['шт', 'м', 'м²', 'лист', 'пара']
@@ -50,6 +56,7 @@ const emptyMaterialRow = () => ({
   unit:       'шт',
   unit_price: '',
   total_price:'',
+  item_id:    '',
   _dirty:     false,
   _saved:     false,
 })
@@ -111,7 +118,6 @@ tr:nth-child(even) { background:#fafafa !important;
 .grand-total { border:2px solid #000; padding:3mm; margin-top:4mm; font-size:10pt; }
 .grand-total table { border:none; margin:0; }
 .grand-total td { border:none !important; padding:1mm 3mm; }
-.notes { font-size:8pt; color:#333; margin-top:3mm; }
 .sign { margin-top:8mm; display:flex; justify-content:space-between; font-size:9pt; }
 .print-btn { display:block; width:210mm; margin:10px auto;
   padding:10px; background:#1a73e8; color:white;
@@ -129,63 +135,35 @@ tr:nth-child(even) { background:#fafafa !important;
 </style></head><body>
 <button class="print-btn" onclick="window.print()">🖨️ Распечатать смету</button>
 <div class="page">
-  <div class="header">
-    <h1>JEVON</h1>
-    <p>От чертежа до готовой детали</p>
-  </div>
+  <div class="header"><h1>JEVON</h1><p>От чертежа до готовой детали</p></div>
   <div class="info-grid">
     <div class="cell"><span class="label">Номер заказа:</span> ${order?.order_number||'—'}</div>
     <div class="cell"><span class="label">Дата:</span> ${new Date().toLocaleDateString('ru-RU')}</div>
     <div class="cell"><span class="label">Клиент/телефон:</span> ${order?.client_name||'—'} ${order?.client_phone||''}</div>
     <div class="cell"><span class="label">Наименование заказа:</span> ${order?.title||''}</div>
   </div>
-
   <h2>Список предоставляемых услуг</h2>
-  <table>
-    <thead><tr>
-      <th>№</th><th>Наименование услуг</th>
-      <th>Цвет, код, артикул</th>
-      <th>Кол-во</th><th>Ед.</th>
-      <th>Цена за ед. (сом.)</th>
-      <th>Общая сумма (сом.)</th>
-    </tr></thead>
-    <tbody>
-      ${svcRows}
-      <tr class="total-row">
-        <td colspan="6" style="text-align:right">Итого услуги:</td>
-        <td class="right">${Math.round(totalSvc).toLocaleString()}</td>
-      </tr>
-    </tbody>
-  </table>
-
+  <table><thead><tr>
+    <th>№</th><th>Наименование услуг</th><th>Цвет, код, артикул</th>
+    <th>Кол-во</th><th>Ед.</th><th>Цена за ед. (сом.)</th><th>Общая сумма (сом.)</th>
+  </tr></thead><tbody>
+    ${svcRows}
+    <tr class="total-row"><td colspan="6" style="text-align:right">Итого услуги:</td><td class="right">${Math.round(totalSvc).toLocaleString()}</td></tr>
+  </tbody></table>
   ${matRows ? `
   <h2>Список расходующих материалов</h2>
-  <table>
-    <thead><tr>
-      <th>№</th><th>Наименование материалов</th>
-      <th>Кол-во</th>
-      <th>Цена за ед. (сом.)</th>
-      <th>Общая сумма (сом.)</th>
-    </tr></thead>
-    <tbody>
-      ${matRows}
-      <tr class="total-row">
-        <td colspan="4" style="text-align:right">Итого материалы:</td>
-        <td class="right">${Math.round(totalMat).toLocaleString()}</td>
-      </tr>
-    </tbody>
-  </table>` : ''}
-
-  <div class="grand-total">
-    <table>
-      <tr><td><b>Итого к оплате:</b></td><td></td></tr>
-      <tr><td>Услуги:</td><td><b>${Math.round(totalSvc).toLocaleString()} сом.</b></td></tr>
-      ${matRows ? `<tr><td>Материалы:</td><td><b>${Math.round(totalMat).toLocaleString()} сом.</b></td></tr>` : ''}
-      <tr><td style="font-size:11pt"><b>Общий итог:</b></td>
-          <td style="font-size:11pt"><b>${Math.round(totalSvc+totalMat).toLocaleString()} сом.</b></td></tr>
-    </table>
-  </div>
-
+  <table><thead><tr>
+    <th>№</th><th>Наименование материалов</th><th>Кол-во</th><th>Цена за ед. (сом.)</th><th>Общая сумма (сом.)</th>
+  </tr></thead><tbody>
+    ${matRows}
+    <tr class="total-row"><td colspan="4" style="text-align:right">Итого материалы:</td><td class="right">${Math.round(totalMat).toLocaleString()}</td></tr>
+  </tbody></table>` : ''}
+  <div class="grand-total"><table>
+    <tr><td><b>Итого к оплате:</b></td><td></td></tr>
+    <tr><td>Услуги:</td><td><b>${Math.round(totalSvc).toLocaleString()} сом.</b></td></tr>
+    ${matRows ? `<tr><td>Материалы:</td><td><b>${Math.round(totalMat).toLocaleString()} сом.</b></td></tr>` : ''}
+    <tr><td style="font-size:11pt"><b>Общий итог:</b></td><td style="font-size:11pt"><b>${Math.round(totalSvc+totalMat).toLocaleString()} сом.</b></td></tr>
+  </table></div>
   <div class="sign">
     <span>Исполнитель: _______________________</span>
     <span>Клиент: _______________________</span>
@@ -204,14 +182,11 @@ function ServiceSelect({ value, catalog, onSelect, canEditPrice }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
-  // Группируем каталог
   const grouped = catalog.reduce((acc, item) => {
     if (!acc[item.group_name]) acc[item.group_name] = []
     acc[item.group_name].push(item)
     return acc
   }, {})
-
-  const selected = catalog.find(c => c.id === value?.catalog_id)
 
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
@@ -221,64 +196,31 @@ function ServiceSelect({ value, catalog, onSelect, canEditPrice }) {
 
   return (
     <div ref={ref} style={{ position:'relative' }}>
-      <div
-        onClick={() => setOpen(o => !o)}
-        style={{
-          padding:'4px 8px', cursor:'pointer', fontSize:13,
-          minHeight:28, display:'flex', alignItems:'center',
-          justifyContent:'space-between', gap:4,
-        }}
-      >
+      <div onClick={() => setOpen(o => !o)}
+        style={{ padding:'4px 8px', cursor:'pointer', fontSize:13, minHeight:28, display:'flex', alignItems:'center', justifyContent:'space-between', gap:4 }}>
         <span style={{ flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
           {value?.name || <span style={{ color:'var(--cui-secondary-color)' }}>Выберите услугу...</span>}
         </span>
         <span style={{ fontSize:10, color:'var(--cui-secondary-color)', flexShrink:0 }}>▼</span>
       </div>
-
       {open && (
-        <div style={{
-          position:'absolute', top:'100%', left:0, zIndex:1060,
-          background:'var(--cui-body-bg)',
-          border:'1px solid var(--cui-border-color)',
-          borderRadius:4, boxShadow:'0 6px 20px rgba(0,0,0,0.15)',
-          minWidth:360, maxHeight:320, overflowY:'auto',
-        }}>
+        <div style={{ position:'absolute', top:'100%', left:0, zIndex:1060, background:'var(--cui-body-bg)', border:'1px solid var(--cui-border-color)', borderRadius:4, boxShadow:'0 6px 20px rgba(0,0,0,0.15)', minWidth:360, maxHeight:320, overflowY:'auto' }}>
           {Object.entries(grouped).map(([group, items]) => (
             <div key={group}>
-              <div style={{
-                padding:'4px 10px', fontSize:10, fontWeight:700,
-                background:'var(--cui-secondary-bg)',
-                color:'var(--cui-secondary-color)',
-                textTransform:'uppercase', letterSpacing:0.5,
-                position:'sticky', top:0,
-              }}>
+              <div style={{ padding:'4px 10px', fontSize:10, fontWeight:700, background:'var(--cui-secondary-bg)', color:'var(--cui-secondary-color)', textTransform:'uppercase', letterSpacing:0.5, position:'sticky', top:0 }}>
                 {GROUP_LABELS[group] || group}
               </div>
               {items.map(item => (
                 <div key={item.id}
                   onMouseDown={() => { onSelect(item); setOpen(false) }}
-                  style={{
-                    padding:'6px 12px', cursor:'pointer', fontSize:13,
-                    borderBottom:'0.5px solid var(--cui-border-color)',
-                    display:'flex', justifyContent:'space-between', alignItems:'center',
-                    background: value?.catalog_id === item.id ? 'var(--cui-primary-bg-subtle)' : 'transparent',
-                  }}
+                  style={{ padding:'6px 12px', cursor:'pointer', fontSize:13, borderBottom:'0.5px solid var(--cui-border-color)', display:'flex', justifyContent:'space-between', alignItems:'center', background: value?.catalog_id === item.id ? 'var(--cui-primary-bg-subtle)' : 'transparent' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--cui-primary-bg-subtle)'}
-                  onMouseLeave={e => e.currentTarget.style.background =
-                    value?.catalog_id === item.id ? 'var(--cui-primary-bg-subtle)' : 'transparent'}
-                >
+                  onMouseLeave={e => e.currentTarget.style.background = value?.catalog_id === item.id ? 'var(--cui-primary-bg-subtle)' : 'transparent'}>
                   <span>
                     {item.name}
-                    {item.unit_spec && (
-                      <span style={{ fontSize:11, color:'var(--cui-secondary-color)', marginLeft:4 }}>
-                        ({item.unit_spec})
-                      </span>
-                    )}
+                    {item.unit_spec && <span style={{ fontSize:11, color:'var(--cui-secondary-color)', marginLeft:4 }}>({item.unit_spec})</span>}
                   </span>
-                  <span style={{
-                    fontSize:12, fontWeight:600,
-                    color:'var(--cui-success)', flexShrink:0, marginLeft:8,
-                  }}>
+                  <span style={{ fontSize:12, fontWeight:600, color:'var(--cui-success)', flexShrink:0, marginLeft:8 }}>
                     {item.price > 0 ? `${item.price} сом.` : 'бесплатно'} / {item.unit}
                   </span>
                 </div>
@@ -294,11 +236,7 @@ function ServiceSelect({ value, catalog, onSelect, canEditPrice }) {
 function ColorSelect({ value, colors, onChange }) {
   return (
     <select value={value || ''} onChange={e => onChange(e.target.value)}
-      style={{
-        width:'100%', border:'none', background:'transparent',
-        fontSize:12, padding:'4px 2px', color:'var(--cui-body-color)',
-        cursor:'pointer',
-      }}>
+      style={{ width:'100%', border:'none', background:'transparent', fontSize:12, padding:'4px 2px', color:'var(--cui-body-color)', cursor:'pointer' }}>
       <option value="">—</option>
       {colors.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
     </select>
@@ -308,14 +246,27 @@ function ColorSelect({ value, colors, onChange }) {
 // ── Главный компонент ─────────────────────────────────────
 
 export default function EstimateTable({ orderId, order, canEdit = true, canEditPrice = false }) {
-  const [svcRows,   setSvcRows]   = useState(() => Array.from({ length: DEFAULT_ROWS }, emptyServiceRow))
-  const [matRows,   setMatRows]   = useState(() => Array.from({ length: 5 }, emptyMaterialRow))
-  const [catalog,   setCatalog]   = useState([])
-  const [colors,    setColors]    = useState([])
-  const [saving,    setSaving]    = useState(false)
-  const [error,     setError]     = useState('')
-  const [success,   setSuccess]   = useState(false)
-  const [isMobile,  setIsMobile]  = useState(window.innerWidth < 768)
+  const [svcRows,  setSvcRows]  = useState(() => Array.from({ length: DEFAULT_ROWS }, emptyServiceRow))
+  const [matRows,  setMatRows]  = useState(() => Array.from({ length: 5 }, emptyMaterialRow))
+  const [catalog,  setCatalog]  = useState([])
+  const [colors,   setColors]   = useState([])
+  const [saving,   setSaving]   = useState(false)
+  const [error,    setError]    = useState('')
+  const [success,  setSuccess]  = useState(false)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  // Склад
+  const [warehouseModal,   setWarehouseModal]   = useState(false)
+  const [warehouseItems,   setWarehouseItems]   = useState([])
+  const [warehouseSearch,  setWarehouseSearch]  = useState('')
+  const [warehouseLoading, setWarehouseLoading] = useState(false)
+
+  // Заявка
+  const [invoiceModal,   setInvoiceModal]   = useState(false)
+  const [invoiceItems,   setInvoiceItems]   = useState([])
+  const [invoiceSaving,  setInvoiceSaving]  = useState(false)
+  const [invoiceSuccess, setInvoiceSuccess] = useState(false)
+  const [invoiceError,   setInvoiceError]   = useState('')
 
   useEffect(() => {
     const h = () => setIsMobile(window.innerWidth < 768)
@@ -332,9 +283,8 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
       ])
       const catData = catRes.data.data || []
       setCatalog(catData)
-      setColors(colRes.data.data  || [])
+      setColors(colRes.data.data || [])
 
-      // Индекс каталога по id для быстрого поиска группы
       const catById = {}
       catData.forEach(c => { catById[c.id] = c })
 
@@ -344,17 +294,13 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
       const filledSvc = svc.map(s => {
         const catItem = catById[s.catalog_id] || {}
         return {
-          _id:        s.id,
-          id:         s.id,
-          catalog_id: s.catalog_id,
-          name:       s.name,
-          color:      s.color      || '',
-          article:    s.article    || '',
-          quantity:   s.quantity   && s.quantity   !== 0 ? s.quantity   : '',
-          unit:       s.unit       || 'шт',
-          unit_spec:  s.unit_spec  || '',
-          unit_price: s.unit_price && s.unit_price !== 0 ? s.unit_price : '',
-          total_price:s.total_price && s.total_price !== 0 ? s.total_price : '',
+          _id: s.id, id: s.id, catalog_id: s.catalog_id,
+          name: s.name, color: s.color || '', article: s.article || '',
+          quantity:    s.quantity    && s.quantity    !== 0 ? s.quantity    : '',
+          unit:        s.unit        || 'шт',
+          unit_spec:   s.unit_spec   || '',
+          unit_price:  s.unit_price  && s.unit_price  !== 0 ? s.unit_price  : '',
+          total_price: s.total_price && s.total_price !== 0 ? s.total_price : '',
           _dirty: false, _saved: true,
           _group: catItem.group_name || '',
         }
@@ -363,13 +309,13 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
       setSvcRows([...filledSvc, ...Array.from({ length: emptySvc }, emptyServiceRow)])
 
       const filledMat = mat.map(m => ({
-        _id:        m.id,
-        id:         m.id,
-        name:       m.name,
-        quantity:   m.quantity   && m.quantity   !== 0 ? m.quantity   : '',
-        unit:       m.unit       || 'шт',
-        unit_price: m.unit_price && m.unit_price !== 0 ? m.unit_price : '',
-        total_price:m.total_price && m.total_price !== 0 ? m.total_price : '',
+        _id: m.id, id: m.id,
+        name:        m.name,
+        quantity:    m.quantity    && m.quantity    !== 0 ? m.quantity    : '',
+        unit:        m.unit        || 'шт',
+        unit_price:  m.unit_price  && m.unit_price  !== 0 ? m.unit_price  : '',
+        total_price: m.total_price && m.total_price !== 0 ? m.total_price : '',
+        item_id:     m.item_id     || '',
         _dirty: false, _saved: true,
       }))
       const emptyMat = Math.max(0, 5 - filledMat.length)
@@ -381,9 +327,102 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
 
   useEffect(() => { loadEstimate() }, [loadEstimate])
 
-  // ── Обновление строк ──────────────────────────────────
+  // ── Склад ─────────────────────────────────────────────
 
-  // Площадь листа по названию услуги распила
+  const openWarehouseModal = async () => {
+    setWarehouseModal(true)
+    setWarehouseSearch('')
+    setWarehouseLoading(true)
+    try {
+      const r = await api.get('/warehouse/items')
+      setWarehouseItems(r.data.data || [])
+    } catch {} finally { setWarehouseLoading(false) }
+  }
+
+const addFromWarehouse = (item) => {
+  setMatRows(prev => {
+    const emptyIdx = prev.findIndex(r => !r.name.trim())
+    const price = item.sale_price > 0 ? item.sale_price : ''
+    const qty   = 1
+    const newRow = {
+      ...emptyMaterialRow(),
+      name:        item.name,
+      unit:        item.unit || 'шт',
+      unit_price:  price,
+      quantity:    qty,
+      total_price: price ? qty * price : '',
+      item_id:     item.id,
+      _dirty:      true,
+    }
+    if (emptyIdx !== -1) {
+      const next = [...prev]
+      next[emptyIdx] = newRow
+      return next
+    }
+    return [...prev, newRow]
+  })
+  setWarehouseModal(false)
+}
+
+  const filteredWarehouse = warehouseItems.filter(i => {
+    const q = warehouseSearch.toLowerCase()
+    return !q || i.name?.toLowerCase().includes(q) || i.category?.toLowerCase().includes(q) || i.article?.toLowerCase().includes(q)
+  })
+
+  // ── Заявка ────────────────────────────────────────────
+
+  const openInvoiceModal = () => {
+    const grouped = {}
+    for (const row of matRows.filter(r => r.name.trim() && r.item_id)) {
+      if (!grouped[row.item_id]) {
+        grouped[row.item_id] = {
+          item_id:    row.item_id,
+          item_name:  row.name,
+          unit:       row.unit,
+          quantity:   0,
+          sale_price: parseFloat(row.unit_price) || 0,
+        }
+      }
+      grouped[row.item_id].quantity += parseFloat(row.quantity) || 0
+    }
+    setInvoiceItems(Object.values(grouped))
+    setInvoiceError('')
+    setInvoiceSuccess(false)
+    setInvoiceModal(true)
+  }
+
+  const updateInvoiceItem = (idx, field, value) => {
+    setInvoiceItems(prev => prev.map((item, i) =>
+      i === idx ? { ...item, [field]: parseFloat(value) || 0 } : item
+    ))
+  }
+
+  const handleCreateInvoice = async () => {
+    const valid = invoiceItems.filter(i => i.item_id && i.quantity > 0)
+    if (valid.length === 0) { setInvoiceError('Нет позиций для заявки'); return }
+    setInvoiceSaving(true)
+    setInvoiceError('')
+    try {
+      await api.post('/warehouse/outgoing-invoices', {
+        invoice_type: 'order',
+        order_id:     orderId,
+        notes:        `Заявка из Сметы заказа #${order?.order_number || ''}`,
+        items: valid.map(i => ({
+          item_id:    i.item_id,
+          quantity:   i.quantity,
+          sale_price: i.sale_price || 0,
+        })),
+      })
+      setInvoiceSuccess(true)
+    } catch (e) {
+      setInvoiceError(e.response?.data?.error || 'Ошибка создания заявки')
+    } finally { setInvoiceSaving(false) }
+  }
+
+  const hasWarehouseMatItems = matRows.some(r => r.name.trim() && r.item_id)
+
+  // ── Логика расчёта ────────────────────────────────────
+
   const SHEET_AREA = {
     'Распил ДСП 5,03м²': 5.03,
     'Распил МДФ 3,41м²': 3.41,
@@ -391,11 +430,6 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
     'Распил МДФ 5,79м²': 5.79,
   }
 
-  // Группы присадки — чертёж бесплатно
-  const FREE_DESIGN_GROUPS = ['drilling', 'other', 'packing']
-
-  // Множитель только для Присадки (drilling): "1×2" → 2, "1×3" → 3
-  // Для Кромкования "0.8×35" — это характеристика материала, не множитель
   const getMultiplier = (unit_spec, group) => {
     if (!unit_spec || group !== 'drilling') return 1
     const match = unit_spec.match(/^1[×x\*]\s*(\d+)$/)
@@ -409,51 +443,27 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
     return (q > 0 && p > 0) ? q * m * p : ''
   }
 
-  // Пересчитываем строку Чертежа на основе строк Распила
   const recalcDesign = (rows) => {
     const designIdx = rows.findIndex(r => r._group === 'design')
     if (designIdx === -1) return rows
-
     const designRow = rows[designIdx]
-    const designPrice = 15
-
-    // Если есть хоть одна строка присадки — Чертёж бесплатно
     const hasDrilling = rows.some(r => r.name && r._group === 'drilling')
-
     if (hasDrilling) {
       const next = [...rows]
-      next[designIdx] = {
-        ...designRow,
-        quantity:    '',
-        unit_price:  0,
-        total_price: 0,
-        _dirty:      true,
-      }
+      next[designIdx] = { ...designRow, quantity: '', unit_price: 0, total_price: 0, _dirty: true }
       return next
     }
-
-    // Считаем общую площадь листов распила
     let totalM2 = 0
     rows.forEach(r => {
       if (r._group === 'sawing' && r.name && SHEET_AREA[r.name]) {
-        const qty = parseFloat(r.quantity) || 0
-        totalM2 += qty * SHEET_AREA[r.name]
+        totalM2 += (parseFloat(r.quantity) || 0) * SHEET_AREA[r.name]
       }
     })
-
     if (totalM2 > 0) {
       const next = [...rows]
-      next[designIdx] = {
-        ...designRow,
-        quantity:    parseFloat(totalM2.toFixed(2)),
-        unit:        'м²',
-        unit_price:  designPrice,
-        total_price: parseFloat((totalM2 * designPrice).toFixed(2)),
-        _dirty:      true,
-      }
+      next[designIdx] = { ...designRow, quantity: parseFloat(totalM2.toFixed(2)), unit: 'м²', unit_price: 15, total_price: parseFloat((totalM2 * 15).toFixed(2)), _dirty: true }
       return next
     }
-
     return rows
   }
 
@@ -465,8 +475,7 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
         row.total_price = calcTotal(
           field === 'quantity'   ? value : row.quantity,
           field === 'unit_price' ? value : row.unit_price,
-          row.unit_spec,
-          row._group
+          row.unit_spec, row._group
         )
       }
       next[idx] = row
@@ -477,22 +486,15 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
   const selectCatalogItem = (idx, item) => {
     setSvcRows(prev => {
       const next = [...prev]
-      // Первая строка Чертежа — цена подтянется из recalcDesign
       const isDesign = item.group_name === 'design'
       const price = isDesign ? (item.price || 15) : (item.price || '')
       const row = {
         ...next[idx],
-        catalog_id: item.id,
-        name:       item.name,
-        unit:       item.unit,
-        unit_spec:  item.unit_spec || '',
-        unit_price: price,
-        _dirty:     true,
-        _group:     item.group_name,
+        catalog_id: item.id, name: item.name, unit: item.unit,
+        unit_spec: item.unit_spec || '', unit_price: price,
+        _dirty: true, _group: item.group_name,
       }
-      if (!isDesign) {
-        row.total_price = calcTotal(row.quantity, price, item.unit_spec, item.group_name)
-      }
+      if (!isDesign) row.total_price = calcTotal(row.quantity, price, item.unit_spec, item.group_name)
       next[idx] = row
       return recalcDesign(next)
     })
@@ -513,19 +515,11 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
   }
 
   const deleteSvcRow = (idx) => {
-    setSvcRows(prev => {
-      const next = [...prev]
-      next.splice(idx, 1, emptyServiceRow())
-      return next
-    })
+    setSvcRows(prev => { const next = [...prev]; next.splice(idx, 1, emptyServiceRow()); return next })
   }
 
   const deleteMatRow = (idx) => {
-    setMatRows(prev => {
-      const next = [...prev]
-      next.splice(idx, 1, emptyMaterialRow())
-      return next
-    })
+    setMatRows(prev => { const next = [...prev]; next.splice(idx, 1, emptyMaterialRow()); return next })
   }
 
   // ── Сохранение ───────────────────────────────────────
@@ -534,30 +528,16 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
     setSaving(true)
     setError('')
     try {
-      const services = svcRows
-        .filter(r => r.name.trim())
-        .map((r, i) => ({
-          catalog_id: r.catalog_id,
-          name:       r.name.trim(),
-          color:      r.color    || '',
-          article:    r.article  || '',
-          quantity:   parseFloat(r.quantity)   || 0,
-          unit:       r.unit     || 'шт',
-          unit_spec:  r.unit_spec || '',
-          unit_price: parseFloat(r.unit_price) || 0,
-          sort_order: i,
-        }))
-
-      const materials = matRows
-        .filter(r => r.name.trim())
-        .map((r, i) => ({
-          name:       r.name.trim(),
-          quantity:   parseFloat(r.quantity)   || 0,
-          unit:       r.unit     || 'шт',
-          unit_price: parseFloat(r.unit_price) || 0,
-          sort_order: i,
-        }))
-
+      const services = svcRows.filter(r => r.name.trim()).map((r, i) => ({
+        catalog_id: r.catalog_id, name: r.name.trim(),
+        color: r.color || '', article: r.article || '',
+        quantity: parseFloat(r.quantity) || 0, unit: r.unit || 'шт',
+        unit_spec: r.unit_spec || '', unit_price: parseFloat(r.unit_price) || 0, sort_order: i,
+      }))
+      const materials = matRows.filter(r => r.name.trim()).map((r, i) => ({
+        name: r.name.trim(), quantity: parseFloat(r.quantity) || 0,
+        unit: r.unit || 'шт', unit_price: parseFloat(r.unit_price) || 0, sort_order: i,
+      }))
       await api.post(`/orders/${orderId}/estimate`, { services, materials })
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)
@@ -569,25 +549,13 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
     }
   }
 
-  // ── Итоги ────────────────────────────────────────────
-
   const totalSvc = svcRows.reduce((s, r) => s + (parseFloat(r.total_price) || 0), 0)
   const totalMat = matRows.reduce((s, r) => s + (parseFloat(r.total_price) || 0), 0)
   const total    = totalSvc + totalMat
 
-  const cellStyle = { border: '1px solid var(--cui-border-color)', padding: 0 }
-  const inputStyle = {
-    width:'100%', border:'none', background:'transparent',
-    fontSize:13, padding:'4px 6px',
-    color:'var(--cui-body-color)', outline:'none',
-  }
-  const thStyle = {
-    border:'1px solid var(--cui-border-color)',
-    padding:'5px 6px', fontWeight:600, fontSize:11,
-    color:'var(--cui-body-color)',
-    background:'var(--cui-secondary-bg)',
-    textAlign:'center',
-  }
+  const cellStyle  = { border: '1px solid var(--cui-border-color)', padding: 0 }
+  const inputStyle = { width:'100%', border:'none', background:'transparent', fontSize:13, padding:'4px 6px', color:'var(--cui-body-color)', outline:'none' }
+  const thStyle    = { border:'1px solid var(--cui-border-color)', padding:'5px 6px', fontWeight:600, fontSize:11, color:'var(--cui-body-color)', background:'var(--cui-secondary-bg)', textAlign:'center' }
 
   return (
     <div>
@@ -612,8 +580,7 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
             <CButton size="sm" color="primary" onClick={saveAll} disabled={saving}>
               {saving
                 ? <><CSpinner size="sm" className="me-1" />Сохранение...</>
-                : <><CIcon icon={cilSave}  className="me-1" />Сохранить смету</>
-              }
+                : <><CIcon icon={cilSave} className="me-1" />Сохранить смету</>}
             </CButton>
           )}
         </div>
@@ -643,41 +610,29 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
           </thead>
           <tbody>
             {svcRows.map((row, idx) => {
-              const hasData  = row.name.trim() !== ''
-              const isDirty  = hasData && row._dirty && !row._saved
-              const groupBg  = hasData && row._group ? GROUP_COLORS[row._group] : 'transparent'
+              const hasData = row.name.trim() !== ''
+              const isDirty = hasData && row._dirty && !row._saved
+              const groupBg = hasData && row._group ? GROUP_COLORS[row._group] : 'transparent'
               return (
                 <tr key={row._id} style={{ background: isDirty ? 'var(--cui-warning-bg-subtle)' : groupBg }}>
-                  {/* № */}
                   <td style={{ border:'1px solid var(--cui-border-color)', textAlign:'center', fontSize:11, color:'var(--cui-secondary-color)', padding:'2px' }}>
                     {hasData ? idx+1 : ''}
                   </td>
-                  {/* Наименование — выпадающий список из каталога */}
                   <td style={cellStyle}>
                     {canEdit ? (
-                      <ServiceSelect
-                        value={row}
-                        catalog={catalog}
-                        onSelect={item => selectCatalogItem(idx, item)}
-                        canEditPrice={canEditPrice}
-                      />
+                      <ServiceSelect value={row} catalog={catalog} onSelect={item => selectCatalogItem(idx, item)} canEditPrice={canEditPrice} />
                     ) : <div style={{ padding:'4px 8px', fontSize:13 }}>{row.name}</div>}
                   </td>
-                  {/* Цвет */}
                   <td style={cellStyle}>
                     {canEdit ? (
                       <ColorSelect value={row.color} colors={colors} onChange={v => updateSvc(idx, 'color', v)} />
                     ) : <div style={{ padding:'4px 4px', fontSize:12 }}>{row.color}</div>}
                   </td>
-                  {/* Артикул */}
                   <td style={cellStyle}>
                     {canEdit ? (
-                      <input value={row.article} placeholder=""
-                        onChange={e => updateSvc(idx, 'article', e.target.value)}
-                        style={{ ...inputStyle, fontSize:11 }} />
+                      <input value={row.article} placeholder="" onChange={e => updateSvc(idx, 'article', e.target.value)} style={{ ...inputStyle, fontSize:11 }} />
                     ) : <div style={{ padding:'4px 4px', fontSize:11 }}>{row.article}</div>}
                   </td>
-                  {/* Кол-во — с подсказкой множителя если unit_spec = 1×N */}
                   <td style={cellStyle}>
                     {canEdit ? (
                       <div style={{ position:'relative' }}>
@@ -685,18 +640,13 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
                           onChange={e => updateSvc(idx, 'quantity', e.target.value)}
                           style={{ ...inputStyle, textAlign:'center', paddingBottom: row._group === 'drilling' && getMultiplier(row.unit_spec, row._group) > 1 ? '14px' : '4px' }} />
                         {row._group === 'drilling' && getMultiplier(row.unit_spec, row._group) > 1 && row.quantity > 0 && (
-                          <div style={{
-                            position:'absolute', bottom:1, left:0, right:0,
-                            textAlign:'center', fontSize:9,
-                            color:'var(--cui-info)', lineHeight:1,
-                          }}>
+                          <div style={{ position:'absolute', bottom:1, left:0, right:0, textAlign:'center', fontSize:9, color:'var(--cui-info)', lineHeight:1 }}>
                             ×{getMultiplier(row.unit_spec, row._group)}={parseFloat(row.quantity)*getMultiplier(row.unit_spec, row._group)}
                           </div>
                         )}
                       </div>
                     ) : <div style={{ padding:'4px', textAlign:'center' }}>{row.quantity}</div>}
                   </td>
-                  {/* Ед. */}
                   <td style={cellStyle}>
                     {canEdit && row._group !== 'design' ? (
                       <select value={row.unit} onChange={e => updateSvc(idx, 'unit', e.target.value)}
@@ -707,33 +657,14 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
                       {row._group === 'design' ? 'м²' : (row.unit + (row.unit_spec?' '+row.unit_spec:''))}
                     </div>}
                   </td>
-                  {/* Цена — из каталога, редактируют только admin/supervisor */}
-                  <td style={cellStyle}>
-                    {canEdit && canEditPrice ? (
-                      <input type="number" min="0" step="any" value={row.unit_price} placeholder=""
-                        onChange={e => updateSvc(idx, 'unit_price', e.target.value)}
-                        style={{ ...inputStyle, textAlign:'right' }} />
-                    ) : (
-                      <div style={{
-                        padding:'4px 8px', textAlign:'right',
-                        color: row.unit_price !== '' ? 'var(--cui-body-color)' : 'var(--cui-secondary-color)',
-                        background: row.unit_price !== '' && !canEditPrice ? 'var(--cui-secondary-bg)' : 'transparent',
-                        fontSize: 12,
-                      }}>
-                        {row.unit_price !== '' ? Number(row.unit_price).toLocaleString() : ''}
-                      </div>
-                    )}
-                  </td>
-                  {/* Сумма */}
-                  <td style={{
-                    border:'1px solid var(--cui-border-color)', padding:'4px 8px',
-                    textAlign:'right', fontWeight: hasData && row.total_price ? 600 : 400,
-                    color: hasData && row.total_price ? 'var(--cui-success)' : 'var(--cui-secondary-color)',
-                    background: hasData && row.total_price ? 'var(--cui-success-bg-subtle)' : 'transparent',
-                  }}>
+                 <td style={{ ...cellStyle, background: row.item_id ? 'var(--cui-secondary-bg)' : 'transparent' }}>
+  <div style={{ padding:'4px 8px', textAlign:'right', fontSize:13, color: row.unit_price !== '' ? 'var(--cui-body-color)' : 'var(--cui-secondary-color)' }}>
+    {row.unit_price !== '' ? Number(row.unit_price).toLocaleString() : ''}
+  </div>
+</td>
+                  <td style={{ border:'1px solid var(--cui-border-color)', padding:'4px 8px', textAlign:'right', fontWeight: hasData && row.total_price ? 600 : 400, color: hasData && row.total_price ? 'var(--cui-success)' : 'var(--cui-secondary-color)', background: hasData && row.total_price ? 'var(--cui-success-bg-subtle)' : 'transparent' }}>
                     {row.total_price !== '' && row.total_price !== 0 ? Math.round(Number(row.total_price)).toLocaleString() : ''}
                   </td>
-                  {/* Удалить */}
                   {canEdit && (
                     <td style={{ border:'1px solid var(--cui-border-color)', padding:'2px', textAlign:'center' }}>
                       {hasData && (
@@ -745,7 +676,6 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
                 </tr>
               )
             })}
-            {/* Итог услуг */}
             <tr style={{ background:'var(--cui-secondary-bg)', fontWeight:700 }}>
               <td colSpan={7} style={{ border:'1px solid var(--cui-border-color)', padding:'5px 8px', textAlign:'right' }}>Итого услуги:</td>
               <td style={{ border:'1px solid var(--cui-border-color)', padding:'5px 8px', textAlign:'right', color:'var(--cui-success)' }}>
@@ -757,7 +687,6 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
         </table>
       </div>
 
-      {/* Кнопки добавить строки услуг */}
       {canEdit && (
         <div className="d-flex gap-2 mb-4">
           <CButton size="sm" color="secondary" variant="outline"
@@ -772,7 +701,22 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
       )}
 
       {/* ── Таблица материалов ── */}
-      <div className="small fw-semibold mb-1 text-body-secondary">Список расходных материалов</div>
+      <div className="d-flex justify-content-between align-items-center mb-1">
+        <div className="small fw-semibold text-body-secondary">Список расходных материалов</div>
+        <div className="d-flex gap-2">
+          {canEdit && (
+            <CButton size="sm" color="info" variant="outline" onClick={openWarehouseModal}>
+              <CIcon icon={cilSearch} className="me-1" />Из склада
+            </CButton>
+          )}
+          {hasWarehouseMatItems && (
+            <CButton size="sm" color="warning" variant="outline" onClick={openInvoiceModal}>
+              <CIcon icon={cilClipboard} className="me-1" />Создать заявку
+            </CButton>
+          )}
+        </div>
+      </div>
+
       <div style={{ overflowX:'auto', marginBottom:16 }}>
         <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, tableLayout:'fixed' }}>
           <colgroup>
@@ -798,7 +742,12 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
               return (
                 <tr key={row._id} style={{ background: isDirty ? 'var(--cui-warning-bg-subtle)' : 'transparent' }}>
                   <td style={{ border:'1px solid var(--cui-border-color)', textAlign:'center', fontSize:11, color:'var(--cui-secondary-color)', padding:'2px' }}>
-                    {hasData ? idx+1 : ''}
+                    {hasData ? (
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:2 }}>
+                        {idx+1}
+                        {row.item_id && <span style={{ fontSize:9, color:'var(--cui-info)', lineHeight:1 }}>●</span>}
+                      </div>
+                    ) : ''}
                   </td>
                   <td style={cellStyle}>
                     {canEdit ? (
@@ -829,12 +778,7 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
                         style={{ ...inputStyle, textAlign:'right' }} />
                     ) : <div style={{ padding:'4px 8px', textAlign:'right' }}>{row.unit_price !== '' ? Number(row.unit_price).toLocaleString() : ''}</div>}
                   </td>
-                  <td style={{
-                    border:'1px solid var(--cui-border-color)', padding:'4px 8px',
-                    textAlign:'right', fontWeight: hasData && row.total_price ? 600 : 400,
-                    color: hasData && row.total_price ? 'var(--cui-success)' : 'var(--cui-secondary-color)',
-                    background: hasData && row.total_price ? 'var(--cui-success-bg-subtle)' : 'transparent',
-                  }}>
+                  <td style={{ border:'1px solid var(--cui-border-color)', padding:'4px 8px', textAlign:'right', fontWeight: hasData && row.total_price ? 600 : 400, color: hasData && row.total_price ? 'var(--cui-success)' : 'var(--cui-secondary-color)', background: hasData && row.total_price ? 'var(--cui-success-bg-subtle)' : 'transparent' }}>
                     {row.total_price !== '' && row.total_price !== 0 ? Math.round(Number(row.total_price)).toLocaleString() : ''}
                   </td>
                   {canEdit && (
@@ -848,7 +792,6 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
                 </tr>
               )
             })}
-            {/* Итог материалов */}
             <tr style={{ background:'var(--cui-secondary-bg)', fontWeight:700 }}>
               <td colSpan={5} style={{ border:'1px solid var(--cui-border-color)', padding:'5px 8px', textAlign:'right' }}>Итого материалы:</td>
               <td style={{ border:'1px solid var(--cui-border-color)', padding:'5px 8px', textAlign:'right', color:'var(--cui-success)' }}>
@@ -860,7 +803,6 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
         </table>
       </div>
 
-      {/* Кнопки добавить строки материалов */}
       {canEdit && (
         <div className="d-flex gap-2 mb-3">
           <CButton size="sm" color="secondary" variant="outline"
@@ -870,7 +812,6 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
         </div>
       )}
 
-      {/* Итоговый блок */}
       {total > 0 && (
         <div className="p-3 rounded mt-2"
           style={{ border:'1px solid var(--cui-success-border-subtle)', background:'var(--cui-success-bg-subtle)' }}>
@@ -892,6 +833,128 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
           </div>
         </div>
       )}
+
+      {/* ── Модал выбора из склада ── */}
+      <CModal size="lg" visible={warehouseModal} onClose={() => setWarehouseModal(false)}>
+        <CModalHeader><CModalTitle><CIcon icon={cilSearch} className="me-2" />Выбрать из склада</CModalTitle></CModalHeader>
+        <CModalBody>
+          <CInputGroup className="mb-3">
+            <CInputGroupText><CIcon icon={cilSearch} /></CInputGroupText>
+            <CFormInput placeholder="Поиск по названию, артикулу, категории..."
+              value={warehouseSearch} onChange={e => setWarehouseSearch(e.target.value)} autoFocus />
+          </CInputGroup>
+          {warehouseLoading ? (
+            <div className="text-center py-4"><CSpinner /></div>
+          ) : (
+            <CTable small hover responsive style={{ fontSize: 13 }}>
+              <CTableHead>
+                <CTableRow>
+                  <CTableHeaderCell>Наименование</CTableHeaderCell>
+                  <CTableHeaderCell>Категория</CTableHeaderCell>
+                  <CTableHeaderCell className="text-center">Ед.</CTableHeaderCell>
+                  <CTableHeaderCell className="text-end">Остаток</CTableHeaderCell>
+                  <CTableHeaderCell className="text-end">Цена прод.</CTableHeaderCell>
+                  <CTableHeaderCell></CTableHeaderCell>
+                </CTableRow>
+              </CTableHead>
+              <CTableBody>
+                {filteredWarehouse.length === 0 && (
+                  <CTableRow>
+                    <CTableDataCell colSpan={6} className="text-center text-body-secondary py-3">Ничего не найдено</CTableDataCell>
+                  </CTableRow>
+                )}
+                {filteredWarehouse.map(item => (
+                  <CTableRow key={item.id} style={{ cursor:'pointer' }} onClick={() => addFromWarehouse(item)}>
+                    <CTableDataCell>
+                      <div className="fw-semibold">{item.name}</div>
+                      {item.article && <div className="text-body-secondary" style={{ fontSize:11 }}>{item.article}</div>}
+                    </CTableDataCell>
+                    <CTableDataCell>
+                      {item.category && <CBadge color="light" className="text-dark">{item.category}</CBadge>}
+                    </CTableDataCell>
+                    <CTableDataCell className="text-center">{item.unit}</CTableDataCell>
+                    <CTableDataCell className="text-end">
+                      <span className={item.balance <= 0 ? 'text-danger' : item.balance <= item.min_stock ? 'text-warning' : 'text-success'}>
+                        {item.balance?.toLocaleString() || 0}
+                      </span>
+                    </CTableDataCell>
+                    <CTableDataCell className="text-end">
+                      {item.sale_price > 0 ? `${item.sale_price.toLocaleString()} сом` : '—'}
+                    </CTableDataCell>
+                    <CTableDataCell>
+                      <CButton size="sm" color="primary" variant="outline">+ Добавить</CButton>
+                    </CTableDataCell>
+                  </CTableRow>
+                ))}
+              </CTableBody>
+            </CTable>
+          )}
+        </CModalBody>
+        <CModalFooter>
+          <CButton color="secondary" variant="outline" onClick={() => setWarehouseModal(false)}>Закрыть</CButton>
+        </CModalFooter>
+      </CModal>
+
+      {/* ── Модал заявки ── */}
+      <CModal size="lg" visible={invoiceModal} onClose={() => setInvoiceModal(false)}>
+        <CModalHeader><CModalTitle><CIcon icon={cilClipboard} className="me-2" />Создать заявку со склада</CModalTitle></CModalHeader>
+        <CModalBody>
+          {invoiceError && <CAlert color="danger" className="mb-3">{invoiceError}</CAlert>}
+          {invoiceSuccess ? (
+            <CAlert color="success">
+              ✅ Заявка создана! Она появилась на странице{' '}
+              <a href="/warehouse/outgoing-invoices" target="_blank" rel="noopener noreferrer">Расходных накладных</a>{' '}
+              со статусом «Черновик».
+            </CAlert>
+          ) : invoiceItems.length === 0 ? (
+            <CAlert color="warning">Нет позиций привязанных к складу. Добавьте материалы через кнопку «Из склада».</CAlert>
+          ) : (
+            <>
+              <p className="small text-body-secondary mb-3">Позиции привязанные к номенклатуре склада. Проверьте количество и укажите цену продажи.</p>
+              <CTable small bordered style={{ fontSize: 13 }}>
+                <CTableHead>
+                  <CTableRow>
+                    <CTableHeaderCell>Материал</CTableHeaderCell>
+                    <CTableHeaderCell className="text-center" style={{ width: 70 }}>Ед.</CTableHeaderCell>
+                    <CTableHeaderCell style={{ width: 100 }}>Кол-во</CTableHeaderCell>
+                    <CTableHeaderCell style={{ width: 120 }}>Цена прод.</CTableHeaderCell>
+                  </CTableRow>
+                </CTableHead>
+                <CTableBody>
+                  {invoiceItems.map((item, idx) => (
+                    <CTableRow key={item.item_id}>
+                      <CTableDataCell className="fw-semibold">{item.item_name}</CTableDataCell>
+                      <CTableDataCell className="text-center">{item.unit}</CTableDataCell>
+                      <CTableDataCell>
+                        <input type="number" min="0.001" step="any" value={item.quantity}
+                          onChange={e => updateInvoiceItem(idx, 'quantity', e.target.value)}
+                          style={{ width:'100%', border:'1px solid var(--cui-border-color)', borderRadius:4, padding:'3px 6px', textAlign:'right', background:'transparent', color:'var(--cui-body-color)' }} />
+                      </CTableDataCell>
+                      <CTableDataCell>
+                        <input type="number" min="0" step="any" value={item.sale_price || ''} placeholder="0"
+                          onChange={e => updateInvoiceItem(idx, 'sale_price', e.target.value)}
+                          style={{ width:'100%', border:'1px solid var(--cui-border-color)', borderRadius:4, padding:'3px 6px', textAlign:'right', background:'transparent', color:'var(--cui-body-color)' }} />
+                      </CTableDataCell>
+                    </CTableRow>
+                  ))}
+                </CTableBody>
+              </CTable>
+            </>
+          )}
+        </CModalBody>
+        <CModalFooter>
+          <CButton color="secondary" variant="outline" onClick={() => setInvoiceModal(false)}>
+            {invoiceSuccess ? 'Закрыть' : 'Отмена'}
+          </CButton>
+          {!invoiceSuccess && invoiceItems.length > 0 && (
+            <CButton color="primary" disabled={invoiceSaving} onClick={handleCreateInvoice}>
+              {invoiceSaving
+                ? <><CSpinner size="sm" className="me-1" />Создание...</>
+                : <><CIcon icon={cilClipboard} className="me-1" />Создать заявку</>}
+            </CButton>
+          )}
+        </CModalFooter>
+      </CModal>
     </div>
   )
 }

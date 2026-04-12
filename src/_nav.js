@@ -1,14 +1,9 @@
 import React from 'react'
 import CIcon from '@coreui/icons-react'
 import {
-  cilSpeedometer,
-  cilFolderOpen,
-  cilTask,
-  cilPeople,
-  cilSettings,
-  cilIndustry,
-  cilList,
-  cilStorage,
+  cilSpeedometer, cilFolderOpen, cilTask,
+  cilPeople, cilSettings, cilList, cilStorage,
+  cilGroup, cilMoney, cilChartLine,
 } from '@coreui/icons'
 import { CNavGroup, CNavItem, CNavTitle } from '@coreui/react'
 
@@ -24,18 +19,21 @@ const _nav = [
     to: '/dashboard',
     icon: <CIcon icon={cilSpeedometer} customClassName="nav-icon" />,
     _i18n: true,
+     roles: ['admin'],
   },
 
-  // ── Заказы цеха ──────────────────────────────────────
+  // ── Заказы ───────────────────────────────────────────────
   {
     component: CNavTitle,
-    name: 'Заказы',
+    name: 'nav.orders',
+    _i18n: true,
   },
   {
     component: CNavItem,
-    name: 'Все заказы',
+    name: 'nav.all_orders',
     to: '/orders',
     icon: <CIcon icon={cilList} customClassName="nav-icon" />,
+    _i18n: true,
   },
   {
     component: CNavItem,
@@ -52,41 +50,58 @@ const _nav = [
     _i18n: true,
   },
   {
-  component: CNavItem,
-  name: 'Клиенты',
-  to: '/clients',
-  icon: <CIcon icon={cilPeople} customClassName="nav-icon" />,
-},
+    component: CNavItem,
+    name: 'nav.clients',
+    to: '/clients',
+    icon: <CIcon icon={cilPeople} customClassName="nav-icon" />,
+    _i18n: true,
+    roles: ['admin', 'supervisor', 'manager'],
+  },
 
-  // ── Склад ─────────────────────────────────────────────
+  // ── Финансы ──────────────────────────────────────────────
   {
     component: CNavTitle,
-    name: 'Склад',
+    name: 'nav.finance',
+    _i18n: true,
+  },
+  {
+    component: CNavItem,
+    name: 'nav.expenses',
+    to: '/expenses',
+    icon: <CIcon icon={cilMoney} customClassName="nav-icon" />,
+    _i18n: true,
+    roles: ['admin', 'supervisor', 'manager'],
+  },
+  {
+    component: CNavItem,
+    name: 'nav.reports',
+    to: '/reports',
+    icon: <CIcon icon={cilChartLine} customClassName="nav-icon" />,
+    _i18n: true,
+    roles: ['admin', 'supervisor'],
+  },
+
+  // ── Склад ─────────────────────────────────────────────────
+  {
+    component: CNavTitle,
+    name: 'nav.warehouse',
+    _i18n: true,
   },
   {
     component: CNavGroup,
-    name: 'Склад',
+    name: 'nav.warehouse',
     icon: <CIcon icon={cilStorage} customClassName="nav-icon" />,
+    _i18n: true,
+    roles: ['admin', 'supervisor', 'manager', 'warehouse', 'seller'],
     items: [
-      {
-        component: CNavItem,
-        name: 'Номенклатура',
-        to: '/warehouse/items',
-      },
-      {
-        component: CNavItem,
-        name: 'Поставщики',
-        to: '/warehouse/suppliers',
-      },
-      {
-        component: CNavItem,
-        name: 'Приходные накладные',
-        to: '/warehouse/receipts',
-      },
+      { component: CNavItem, name: 'nav.items',     to: '/warehouse/items',     _i18n: true  },
+      { component: CNavItem, name: 'nav.suppliers', to: '/warehouse/suppliers', _i18n: true  },
+      { component: CNavItem, name: 'nav.receipts',  to: '/warehouse/receipts',  _i18n: true  },
+      { component: CNavItem, name: 'nav.outgoing_invoices', to: '/warehouse/outgoing-invoices', _i18n: true },
     ],
   },
 
-  // ── Управление ───────────────────────────────────────
+  // ── Управление ───────────────────────────────────────────
   {
     component: CNavTitle,
     name: 'nav.management',
@@ -95,14 +110,21 @@ const _nav = [
   {
     component: CNavItem,
     name: 'nav.employees',
-    to: '/users',
-    icon: <CIcon icon={cilPeople} customClassName="nav-icon" />,
+    to: '/employees',
+    icon: <CIcon icon={cilGroup} customClassName="nav-icon" />,
     _i18n: true,
     roles: ['admin', 'supervisor'],
   },
-  
+  {
+    component: CNavItem,
+    name: 'nav.timesheet',
+    to: '/employees/timesheet',
+    icon: <CIcon icon={cilTask} customClassName="nav-icon" />,
+    _i18n: true,
+    roles: ['admin', 'supervisor'],
+  },
 
-  // ── Система ──────────────────────────────────────────
+  // ── Система ──────────────────────────────────────────────
   {
     component: CNavTitle,
     name: 'nav.system',
@@ -116,7 +138,6 @@ const _nav = [
     _i18n: true,
     roles: ['admin'],
   },
-  
 ]
 
 export default _nav

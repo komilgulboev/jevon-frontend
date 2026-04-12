@@ -7,7 +7,7 @@ import {
   CAlert, CSpinner, CDropdown, CDropdownToggle, CDropdownMenu, CDropdownItem,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilLockLocked, cilUser } from '@coreui/icons'
+import { cilLockLocked, cilPhone } from '@coreui/icons'
 import { useAuth } from '../../../AuthContext'
 
 const LANGUAGES = [
@@ -21,7 +21,7 @@ export default function Login() {
   const { login }   = useAuth()
   const { t, i18n } = useTranslation()
 
-  const [email,    setEmail]    = useState('')
+  const [phone,    setPhone]    = useState('')
   const [password, setPassword] = useState('')
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState('')
@@ -31,21 +31,18 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      const user = await login(email, password)
+      const user = await login(phone, password)
       switch (user.role_name) {
         case 'admin':
         case 'supervisor':
-          navigate('/dashboard?theme=light')
+          navigate('/dashboard')
           break
         default:
-          navigate('/tasks?theme=light')
+          navigate('/tasks')
       }
     } catch (err) {
       const msg = err.response?.data?.error
-      setError(msg === 'invalid credentials'
-        ? t('login.error_invalid')
-        : t('login.error_generic')
-      )
+      setError(msg || 'Неверный номер телефона или пароль')
     } finally {
       setLoading(false)
     }
@@ -95,20 +92,26 @@ export default function Login() {
                       </CAlert>
                     )}
 
+                    {/* Телефон */}
                     <CInputGroup className="mb-3">
-                      <CInputGroupText><CIcon icon={cilUser} /></CInputGroupText>
+                      <CInputGroupText>
+                        <CIcon icon={cilPhone} />
+                      </CInputGroupText>
                       <CFormInput
-                        type="email"
-                        placeholder={t('login.email')}
-                        autoComplete="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        type="tel"
+                        placeholder="Номер телефона"
+                        autoComplete="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
                         required
                       />
                     </CInputGroup>
 
+                    {/* Пароль */}
                     <CInputGroup className="mb-4">
-                      <CInputGroupText><CIcon icon={cilLockLocked} /></CInputGroupText>
+                      <CInputGroupText>
+                        <CIcon icon={cilLockLocked} />
+                      </CInputGroupText>
                       <CFormInput
                         type="password"
                         placeholder={t('login.password')}
@@ -125,11 +128,6 @@ export default function Login() {
                           {loading ? (
                             <><CSpinner size="sm" className="me-2" />{t('login.submitting')}</>
                           ) : t('login.submit')}
-                        </CButton>
-                      </CCol>
-                      <CCol xs={6} className="text-right d-flex align-items-center justify-content-end">
-                        <CButton color="link" className="px-0" type="button">
-                          {t('login.forgot')}
                         </CButton>
                       </CCol>
                     </CRow>

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import {
   CCard, CCardBody, CCardHeader,
   CTable, CTableBody, CTableDataCell,
@@ -7,7 +7,7 @@ import {
   CModal, CModalHeader, CModalTitle, CModalBody, CModalFooter,
   CForm, CFormInput, CFormLabel, CFormSelect,
   CRow, CCol, CInputGroup, CInputGroupText,
-  CNav, CNavItem, CNavLink, CTabContent, CTabPane,
+  CNav, CNavItem, CNavLink,
   CProgress,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
@@ -23,16 +23,14 @@ import {
 } from '../../api/warehouse'
 import { useAuth } from '../../AuthContext'
 
-// ─── Константы ────────────────────────────────────────────────
-
 const PAYMENT_COLOR = { unpaid: 'danger', partial: 'warning', paid: 'success' }
 const PAYMENT_LABEL = { unpaid: 'Не оплачено', partial: 'Частично', paid: 'Оплачено' }
 
 const EMPTY_FORM = {
   number: '', supplier_id: '', receipt_date: new Date().toISOString().slice(0, 10),
-  notes: '', items: [],
+  notes: '', items: [], initial_payment: '', initial_payment_date: new Date().toISOString().slice(0, 10),
 }
-const EMPTY_ITEM    = { item_id: '', quantity: '', price: '', notes: '' }
+const EMPTY_ITEM    = { item_id: '', quantity: '', price: '', sale_price: '', notes: '' }
 const EMPTY_PAYMENT = { amount: '', paid_at: new Date().toISOString().slice(0, 10), notes: '' }
 
 export default function Receipts() {
@@ -46,32 +44,28 @@ export default function Receipts() {
   const [error,     setError]     = useState('')
   const [search,    setSearch]    = useState('')
 
-  // Раскрытая накладная
-  const [expanded, setExpanded] = useState(null)
-  const [detail,   setDetail]   = useState(null)
-  const [activeTab, setActiveTab] = useState('items') // 'items' | 'payments'
+  const [expanded,  setExpanded]  = useState(null)
+  const [detail,    setDetail]    = useState(null)
+  const [activeTab, setActiveTab] = useState('items')
 
-  // Модал создания накладной
-  const [modal,  setModal]  = useState(false)
-  const [form,   setForm]   = useState(EMPTY_FORM)
-  const [saving, setSaving] = useState(false)
+  const [modal,      setModal]      = useState(false)
+  const [form,       setForm]       = useState(EMPTY_FORM)
+  const [saving,     setSaving]     = useState(false)
+  const [nextNumber, setNextNumber] = useState('')
 
-  // Модал редактирования шапки
   const [editModal, setEditModal] = useState(false)
   const [editRec,   setEditRec]   = useState(null)
   const [editForm,  setEditForm]  = useState({})
 
-  // Модал добавления строки
   const [addItemModal,  setAddItemModal]  = useState(false)
   const [addItemRecId,  setAddItemRecId]  = useState(null)
   const [addItemForm,   setAddItemForm]   = useState(EMPTY_ITEM)
   const [addItemSaving, setAddItemSaving] = useState(false)
 
-  // Модал добавления платежа
-  const [payModal,   setPayModal]   = useState(false)
-  const [payRecId,   setPayRecId]   = useState(null)
-  const [payForm,    setPayForm]    = useState(EMPTY_PAYMENT)
-  const [paySaving,  setPaySaving]  = useState(false)
+  const [payModal,  setPayModal]  = useState(false)
+  const [payRecId,  setPayRecId]  = useState(null)
+  const [payForm,   setPayForm]   = useState(EMPTY_PAYMENT)
+  const [paySaving, setPaySaving] = useState(false)
 
   // ── Загрузка ──────────────────────────────────────────
 
@@ -98,11 +92,7 @@ export default function Receipts() {
   // ── Раскрытие накладной ───────────────────────────────
 
   const toggleExpand = async (id) => {
-    if (expanded === id) {
-      setExpanded(null)
-      setDetail(null)
-      return
-    }
+    if (expanded === id) { setExpanded(null); setDetail(null); return }
     setExpanded(id)
     setActiveTab('items')
     await reloadDetail(id)
@@ -112,9 +102,7 @@ export default function Receipts() {
     try {
       const res = await getReceipt(id)
       setDetail(res.data)
-    } catch {
-      setError('Ошибка загрузки накладной')
-    }
+    } catch { setError('Ошибка загрузки накладной') }
   }
 
   // ── Создание накладной ────────────────────────────────
@@ -132,29 +120,51 @@ export default function Receipts() {
   const removeFormItem = (idx) =>
     setForm(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) }))
 
+  // При выборе товара — автоподставить текущую цену продажи
+  const selectFormItem = (idx, itemId) => {
+    const wItem = items.find(i => i.id === itemId)
+    setForm(prev => {
+      const newItems = [...prev.items]
+      newItems[idx] = {
+        ...newItems[idx],
+        item_id:    itemId,
+        sale_price: wItem?.sale_price ? String(wItem.sale_price) : '',
+      }
+      return { ...prev, items: newItems }
+    })
+  }
+
   const handleCreate = async (e) => {
     e.preventDefault()
     if (form.items.length === 0) { setError('Добавьте хотя бы одну строку'); return }
     setSaving(true)
     try {
-      await createReceipt({
+      const res = await createReceipt({
         ...form,
         supplier_id: form.supplier_id || null,
         items: form.items.map(it => ({
-          item_id:  it.item_id,
-          quantity: parseFloat(it.quantity),
-          price:    parseFloat(it.price) || 0,
-          notes:    it.notes,
+          item_id:    it.item_id,
+          quantity:   parseFloat(it.quantity),
+          price:      parseFloat(it.price) || 0,
+          sale_price: parseFloat(it.sale_price) || 0,
+          notes:      it.notes,
         })),
       })
+      // Если указана начальная оплата — создаём платёж
+      const receiptId = res.data?.id
+      if (receiptId && form.initial_payment && parseFloat(form.initial_payment) > 0) {
+        await createPayment(receiptId, {
+          amount:  parseFloat(form.initial_payment),
+          paid_at: form.initial_payment_date || undefined,
+          notes:   'Оплата при создании',
+        })
+      }
       setModal(false)
       setForm(EMPTY_FORM)
       load()
     } catch (err) {
       setError(err.response?.data?.error || 'Ошибка создания')
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
   }
 
   // ── Редактирование шапки ──────────────────────────────
@@ -180,9 +190,7 @@ export default function Receipts() {
       if (expanded === editRec.id) await reloadDetail(editRec.id)
     } catch (err) {
       setError(err.response?.data?.error || 'Ошибка сохранения')
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
   }
 
   // ── Удаление накладной ────────────────────────────────
@@ -193,9 +201,7 @@ export default function Receipts() {
       await deleteReceipt(rec.id)
       if (expanded === rec.id) { setExpanded(null); setDetail(null) }
       load()
-    } catch (err) {
-      setError(err.response?.data?.error || 'Ошибка удаления')
-    }
+    } catch (err) { setError(err.response?.data?.error || 'Ошибка удаления') }
   }
 
   // ── Строки накладной ──────────────────────────────────
@@ -206,24 +212,33 @@ export default function Receipts() {
     setAddItemModal(true)
   }
 
+  // При выборе товара в модале добавления строки — автоподставить цену продажи
+  const selectAddItem = (itemId) => {
+    const wItem = items.find(i => i.id === itemId)
+    setAddItemForm(prev => ({
+      ...prev,
+      item_id:    itemId,
+      sale_price: wItem?.sale_price ? String(wItem.sale_price) : '',
+    }))
+  }
+
   const handleAddItem = async (e) => {
     e.preventDefault()
     setAddItemSaving(true)
     try {
       await addReceiptItem(addItemRecId, {
-        item_id:  addItemForm.item_id,
-        quantity: parseFloat(addItemForm.quantity),
-        price:    parseFloat(addItemForm.price) || 0,
-        notes:    addItemForm.notes,
+        item_id:    addItemForm.item_id,
+        quantity:   parseFloat(addItemForm.quantity),
+        price:      parseFloat(addItemForm.price) || 0,
+        sale_price: parseFloat(addItemForm.sale_price) || 0,
+        notes:      addItemForm.notes,
       })
       setAddItemModal(false)
       await reloadDetail(addItemRecId)
       load()
     } catch (err) {
       setError(err.response?.data?.error || 'Ошибка добавления строки')
-    } finally {
-      setAddItemSaving(false)
-    }
+    } finally { setAddItemSaving(false) }
   }
 
   const handleDeleteItem = async (receiptId, itemId, itemName) => {
@@ -232,9 +247,7 @@ export default function Receipts() {
       await deleteReceiptItem(receiptId, itemId)
       await reloadDetail(receiptId)
       load()
-    } catch (err) {
-      setError(err.response?.data?.error || 'Ошибка удаления строки')
-    }
+    } catch (err) { setError(err.response?.data?.error || 'Ошибка удаления строки') }
   }
 
   // ── Платежи ───────────────────────────────────────────
@@ -250,7 +263,7 @@ export default function Receipts() {
     setPaySaving(true)
     try {
       await createPayment(payRecId, {
-        amount: parseFloat(payForm.amount),
+        amount:  parseFloat(payForm.amount),
         paid_at: payForm.paid_at || undefined,
         notes:   payForm.notes,
       })
@@ -259,9 +272,7 @@ export default function Receipts() {
       load()
     } catch (err) {
       setError(err.response?.data?.error || 'Ошибка добавления платежа')
-    } finally {
-      setPaySaving(false)
-    }
+    } finally { setPaySaving(false) }
   }
 
   const handlePayDelete = async (receiptId, paymentId) => {
@@ -270,17 +281,12 @@ export default function Receipts() {
       await deletePayment(receiptId, paymentId)
       await reloadDetail(receiptId)
       load()
-    } catch (err) {
-      setError(err.response?.data?.error || 'Ошибка удаления платежа')
-    }
+    } catch (err) { setError(err.response?.data?.error || 'Ошибка удаления платежа') }
   }
-
-  // ── Render ────────────────────────────────────────────
 
   const debt = (rec) => Math.max(0, (rec.total_amount || 0) - (rec.paid_amount || 0))
   const paidPercent = (rec) => rec.total_amount > 0
-    ? Math.min(100, Math.round((rec.paid_amount / rec.total_amount) * 100))
-    : 0
+    ? Math.min(100, Math.round((rec.paid_amount / rec.total_amount) * 100)) : 0
 
   return (
     <>
@@ -296,16 +302,20 @@ export default function Receipts() {
             <strong>Приходные накладные</strong>
             <CInputGroup size="sm" style={{ width: 240 }}>
               <CInputGroupText><CIcon icon={cilSearch} /></CInputGroupText>
-              <CFormInput
-                placeholder="Поиск по номеру, поставщику..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
+              <CFormInput placeholder="Поиск по номеру, поставщику..."
+                value={search} onChange={e => setSearch(e.target.value)} />
             </CInputGroup>
             <div className="ms-auto">
               {canEdit && (
                 <CButton color="primary" size="sm"
-                  onClick={() => { setForm(EMPTY_FORM); setModal(true) }}>
+                  onClick={() => {
+                    setForm(EMPTY_FORM)
+                    setNextNumber('')
+                    setModal(true)
+                    api.get('/warehouse/receipts/next-number')
+                      .then(r => setNextNumber(r.data.number))
+                      .catch(() => {})
+                  }}>
                   <CIcon icon={cilPlus} className="me-1" />Новая накладная
                 </CButton>
               )}
@@ -340,8 +350,7 @@ export default function Receipts() {
                   </CTableRow>
                 )}
                 {receipts.map(rec => (
-                  <>
-                    {/* ── Строка накладной ── */}
+                  <React.Fragment key={rec.id}>
                     <CTableRow key={rec.id} style={{ cursor: 'pointer' }}
                       onClick={() => toggleExpand(rec.id)}>
                       <CTableDataCell>
@@ -354,23 +363,15 @@ export default function Receipts() {
                         </CBadge>
                       </CTableDataCell>
                       <CTableDataCell>{rec.supplier_name || '—'}</CTableDataCell>
-                      <CTableDataCell className="text-body-secondary">
-                        {rec.receipt_date}
-                      </CTableDataCell>
+                      <CTableDataCell className="text-body-secondary">{rec.receipt_date}</CTableDataCell>
                       <CTableDataCell className="text-end fw-semibold">
-                        {rec.total_amount > 0
-                          ? `${rec.total_amount.toLocaleString()} сом`
-                          : '—'}
+                        {rec.total_amount > 0 ? `${rec.total_amount.toLocaleString()} сом` : '—'}
                       </CTableDataCell>
                       <CTableDataCell className="text-end text-success">
-                        {rec.paid_amount > 0
-                          ? `${rec.paid_amount.toLocaleString()} сом`
-                          : '—'}
+                        {rec.paid_amount > 0 ? `${rec.paid_amount.toLocaleString()} сом` : '—'}
                       </CTableDataCell>
                       <CTableDataCell className="text-end text-danger">
-                        {debt(rec) > 0
-                          ? `${debt(rec).toLocaleString()} сом`
-                          : '—'}
+                        {debt(rec) > 0 ? `${debt(rec).toLocaleString()} сом` : '—'}
                       </CTableDataCell>
                       <CTableDataCell>
                         <CBadge color={PAYMENT_COLOR[rec.payment_status] || 'secondary'}>
@@ -380,72 +381,58 @@ export default function Receipts() {
                       {canEdit && (
                         <CTableDataCell onClick={e => e.stopPropagation()}>
                           <div className="d-flex gap-1">
-                            <CButton size="sm" color="success" variant="ghost"
-                              title="Добавить оплату"
-                              onClick={() => openPayModal(rec.id)}>
-                              <CIcon icon={cilMoney} />
-                            </CButton>
-                            <CButton size="sm" color="primary" variant="ghost"
-                              onClick={() => openEdit(rec)}>
-                              <CIcon icon={cilPencil} />
-                            </CButton>
-                            <CButton size="sm" color="danger" variant="ghost"
-                              onClick={() => handleDelete(rec)}>
-                              <CIcon icon={cilTrash} />
-                            </CButton>
+                            {rec.payment_status !== 'paid' && (
+                              <>
+                                <CButton size="sm" color="success" variant="ghost"
+                                  title="Добавить оплату" onClick={() => openPayModal(rec.id)}>
+                                  <CIcon icon={cilMoney} />
+                                </CButton>
+                                <CButton size="sm" color="primary" variant="ghost"
+                                  onClick={() => openEdit(rec)}>
+                                  <CIcon icon={cilPencil} />
+                                </CButton>
+                                <CButton size="sm" color="danger" variant="ghost"
+                                  onClick={() => handleDelete(rec)}>
+                                  <CIcon icon={cilTrash} />
+                                </CButton>
+                              </>
+                            )}
                           </div>
                         </CTableDataCell>
                       )}
                     </CTableRow>
 
-                    {/* ── Детали накладной ── */}
                     {expanded === rec.id && (
                       <CTableRow key={`${rec.id}-detail`}>
                         <CTableDataCell colSpan={canEdit ? 9 : 8} className="p-0">
                           <div className="p-3" style={{ background: 'var(--cui-tertiary-bg)' }}>
                             {detail?.id === rec.id ? (
                               <>
-                                {/* Прогресс оплаты */}
                                 {detail.total_amount > 0 && (
                                   <div className="mb-3">
                                     <div className="d-flex justify-content-between small mb-1">
-                                      <span>
-                                        Оплачено: <strong className="text-success">
-                                          {(detail.paid_amount || 0).toLocaleString()} сом
-                                        </strong>
-                                      </span>
-                                      <span>
-                                        Долг: <strong className="text-danger">
-                                          {debt(detail).toLocaleString()} сом
-                                        </strong>
-                                      </span>
-                                      <span>
-                                        Итого: <strong>
-                                          {detail.total_amount.toLocaleString()} сом
-                                        </strong>
-                                      </span>
+                                      <span>Оплачено: <strong className="text-success">
+                                        {(detail.paid_amount || 0).toLocaleString()} сом</strong></span>
+                                      <span>Долг: <strong className="text-danger">
+                                        {debt(detail).toLocaleString()} сом</strong></span>
+                                      <span>Итого: <strong>
+                                        {detail.total_amount.toLocaleString()} сом</strong></span>
                                     </div>
-                                    <CProgress
-                                      value={paidPercent(detail)}
-                                      color={PAYMENT_COLOR[detail.payment_status]}
-                                      style={{ height: 6 }}
-                                    />
+                                    <CProgress value={paidPercent(detail)}
+                                      color={PAYMENT_COLOR[detail.payment_status]} style={{ height: 6 }} />
                                   </div>
                                 )}
 
-                                {/* Вкладки */}
                                 <CNav variant="tabs" className="mb-2">
                                   <CNavItem>
                                     <CNavLink active={activeTab === 'items'}
-                                      onClick={() => setActiveTab('items')}
-                                      style={{ cursor: 'pointer' }}>
+                                      onClick={() => setActiveTab('items')} style={{ cursor: 'pointer' }}>
                                       Товары ({detail.items?.length || 0})
                                     </CNavLink>
                                   </CNavItem>
                                   <CNavItem>
                                     <CNavLink active={activeTab === 'payments'}
-                                      onClick={() => setActiveTab('payments')}
-                                      style={{ cursor: 'pointer' }}>
+                                      onClick={() => setActiveTab('payments')} style={{ cursor: 'pointer' }}>
                                       Оплаты ({detail.payments?.length || 0})
                                       {detail.payment_status !== 'paid' && (
                                         <CBadge color="danger" className="ms-1" style={{ fontSize: 10 }}>
@@ -456,7 +443,6 @@ export default function Receipts() {
                                   </CNavItem>
                                 </CNav>
 
-                                {/* ── Вкладка: Товары ── */}
                                 {activeTab === 'items' && (
                                   <>
                                     <CTable size="sm" bordered responsive
@@ -466,7 +452,8 @@ export default function Receipts() {
                                           <CTableHeaderCell>Материал</CTableHeaderCell>
                                           <CTableHeaderCell>Ед.</CTableHeaderCell>
                                           <CTableHeaderCell className="text-end">Кол-во</CTableHeaderCell>
-                                          <CTableHeaderCell className="text-end">Цена</CTableHeaderCell>
+                                          <CTableHeaderCell className="text-end">Цена прихода</CTableHeaderCell>
+                                          <CTableHeaderCell className="text-end">Цена продажи</CTableHeaderCell>
                                           <CTableHeaderCell className="text-end">Сумма</CTableHeaderCell>
                                           {canEdit && <CTableHeaderCell></CTableHeaderCell>}
                                         </CTableRow>
@@ -474,7 +461,7 @@ export default function Receipts() {
                                       <CTableBody>
                                         {detail.items?.length === 0 && (
                                           <CTableRow>
-                                            <CTableDataCell colSpan={6}
+                                            <CTableDataCell colSpan={7}
                                               className="text-center text-body-secondary">
                                               Строки не добавлены
                                             </CTableDataCell>
@@ -490,6 +477,11 @@ export default function Receipts() {
                                             <CTableDataCell className="text-end">
                                               {it.price.toLocaleString()} сом
                                             </CTableDataCell>
+                                            <CTableDataCell className="text-end text-primary">
+                                              {it.sale_price > 0
+                                                ? `${it.sale_price.toLocaleString()} сом`
+                                                : <span className="text-body-secondary">—</span>}
+                                            </CTableDataCell>
                                             <CTableDataCell className="text-end fw-semibold">
                                               {it.total.toLocaleString()} сом
                                             </CTableDataCell>
@@ -504,10 +496,8 @@ export default function Receipts() {
                                           </CTableRow>
                                         ))}
                                         <CTableRow>
-                                          <CTableDataCell colSpan={canEdit ? 4 : 3}
-                                            className="text-end fw-bold">
-                                            Итого:
-                                          </CTableDataCell>
+                                          <CTableDataCell colSpan={canEdit ? 5 : 4}
+                                            className="text-end fw-bold">Итого:</CTableDataCell>
                                           <CTableDataCell className="text-end fw-bold text-primary">
                                             {detail.total_amount?.toLocaleString()} сом
                                           </CTableDataCell>
@@ -526,7 +516,6 @@ export default function Receipts() {
                                   </>
                                 )}
 
-                                {/* ── Вкладка: Оплаты ── */}
                                 {activeTab === 'payments' && (
                                   <>
                                     <CTable size="sm" bordered responsive
@@ -567,12 +556,9 @@ export default function Receipts() {
                                             )}
                                           </CTableRow>
                                         ))}
-                                        {/* Итог оплат */}
                                         {detail.payments?.length > 0 && (
                                           <CTableRow>
-                                            <CTableDataCell className="text-end fw-bold">
-                                              Итого оплачено:
-                                            </CTableDataCell>
+                                            <CTableDataCell className="text-end fw-bold">Итого оплачено:</CTableDataCell>
                                             <CTableDataCell className="text-end fw-bold text-success">
                                               {(detail.paid_amount || 0).toLocaleString()} сом
                                             </CTableDataCell>
@@ -599,7 +585,7 @@ export default function Receipts() {
                         </CTableDataCell>
                       </CTableRow>
                     )}
-                  </>
+                  </React.Fragment>
                 ))}
               </CTableBody>
             </CTable>
@@ -614,10 +600,18 @@ export default function Receipts() {
           <CModalBody>
             <CRow className="g-3 mb-3">
               <CCol xs={12} md={3}>
-                <CFormLabel>№ накладной</CFormLabel>
+                <CFormLabel>
+                  № накладной
+                  {nextNumber && (
+                    <span className="text-body-secondary ms-2" style={{ fontSize: 11, fontWeight: 400 }}>
+                      (авто: <strong className="text-primary">{nextNumber}</strong>)
+                    </span>
+                  )}
+                </CFormLabel>
                 <CFormInput value={form.number}
                   onChange={e => setForm({ ...form, number: e.target.value })}
-                  placeholder="НК-001" />
+                  placeholder={nextNumber || 'НК-001'}
+                  disabled />
               </CCol>
               <CCol xs={12} md={4}>
                 <CFormLabel>Поставщик</CFormLabel>
@@ -655,10 +649,10 @@ export default function Receipts() {
 
             {form.items.map((it, idx) => (
               <CRow key={idx} className="g-2 mb-2 align-items-end">
-                <CCol xs={12} md={5}>
+                <CCol xs={12} md={4}>
                   <CFormLabel className="small">Материал *</CFormLabel>
                   <CFormSelect required value={it.item_id}
-                    onChange={e => updateFormItem(idx, 'item_id', e.target.value)}>
+                    onChange={e => selectFormItem(idx, e.target.value)}>
                     <option value="">— выбрать —</option>
                     {items.map(m => (
                       <option key={m.id} value={m.id}>
@@ -675,16 +669,24 @@ export default function Receipts() {
                     placeholder="0" />
                 </CCol>
                 <CCol xs={4} md={2}>
-                  <CFormLabel className="small">Цена (сом)</CFormLabel>
+                  <CFormLabel className="small">Цена прихода</CFormLabel>
                   <CFormInput type="number" min="0" step="any"
                     value={it.price}
                     onChange={e => updateFormItem(idx, 'price', e.target.value)}
                     placeholder="0" />
                 </CCol>
-                <CCol xs={3} md={2}>
+                <CCol xs={4} md={2}>
+                  <CFormLabel className="small text-primary fw-semibold">Цена продажи</CFormLabel>
+                  <CFormInput type="number" min="0" step="any"
+                    value={it.sale_price}
+                    onChange={e => updateFormItem(idx, 'sale_price', e.target.value)}
+                    placeholder="0"
+                    style={{ borderColor: 'var(--cui-primary)' }} />
+                </CCol>
+                <CCol xs={3} md={1}>
                   <CFormLabel className="small">Сумма</CFormLabel>
-                  <div className="fw-semibold text-primary" style={{ lineHeight: '38px' }}>
-                    {((parseFloat(it.quantity) || 0) * (parseFloat(it.price) || 0)).toLocaleString()} сом
+                  <div className="fw-semibold text-primary" style={{ lineHeight: '38px', fontSize: 13 }}>
+                    {((parseFloat(it.quantity) || 0) * (parseFloat(it.price) || 0)).toLocaleString()}
                   </div>
                 </CCol>
                 <CCol xs={1} className="d-flex align-items-end">
@@ -703,6 +705,40 @@ export default function Receipts() {
                 ).toLocaleString()} сом
               </div>
             )}
+
+            {/* Блок оплаты при создании */}
+            <hr className="my-3" />
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <strong style={{ fontSize: 13 }}>Оплата</strong>
+              <span className="text-body-secondary small">(необязательно — можно оплатить позже)</span>
+            </div>
+            <CRow className="g-2">
+              <CCol xs={12} md={5}>
+                <CFormLabel className="small">Сумма оплаты (сом)</CFormLabel>
+                <CFormInput
+                  type="number" min="0" step="any"
+                  value={form.initial_payment}
+                  onChange={e => setForm({ ...form, initial_payment: e.target.value })}
+                  placeholder="0"
+                  style={{ borderColor: form.initial_payment ? 'var(--cui-success)' : undefined }}
+                />
+              </CCol>
+              <CCol xs={12} md={4}>
+                <CFormLabel className="small">Дата оплаты</CFormLabel>
+                <CFormInput
+                  type="date"
+                  value={form.initial_payment_date}
+                  onChange={e => setForm({ ...form, initial_payment_date: e.target.value })}
+                />
+              </CCol>
+              {form.initial_payment && parseFloat(form.initial_payment) > 0 && (
+                <CCol xs={12} md={3} className="d-flex align-items-end">
+                  <div className="small text-success fw-semibold">
+                    ✅ Будет записана оплата {parseFloat(form.initial_payment).toLocaleString()} сом
+                  </div>
+                </CCol>
+              )}
+            </CRow>
           </CModalBody>
           <CModalFooter>
             <CButton color="secondary" variant="outline" onClick={() => setModal(false)}>Отмена</CButton>
@@ -762,7 +798,7 @@ export default function Receipts() {
               <CCol xs={12}>
                 <CFormLabel>Материал *</CFormLabel>
                 <CFormSelect required value={addItemForm.item_id}
-                  onChange={e => setAddItemForm({ ...addItemForm, item_id: e.target.value })}>
+                  onChange={e => selectAddItem(e.target.value)}>
                   <option value="">— выбрать —</option>
                   {items.map(m => (
                     <option key={m.id} value={m.id}>
@@ -779,11 +815,24 @@ export default function Receipts() {
                   placeholder="0" />
               </CCol>
               <CCol xs={6}>
-                <CFormLabel>Цена (сом)</CFormLabel>
+                <CFormLabel>Цена прихода (сом)</CFormLabel>
                 <CFormInput type="number" min="0" step="any"
                   value={addItemForm.price}
                   onChange={e => setAddItemForm({ ...addItemForm, price: e.target.value })}
                   placeholder="0" />
+              </CCol>
+              <CCol xs={12}>
+                <CFormLabel className="text-primary fw-semibold">
+                  Цена продажи (сом)
+                  <span className="text-body-secondary fw-normal ms-2" style={{ fontSize: 11 }}>
+                    — обновит номенклатуру
+                  </span>
+                </CFormLabel>
+                <CFormInput type="number" min="0" step="any"
+                  value={addItemForm.sale_price}
+                  onChange={e => setAddItemForm({ ...addItemForm, sale_price: e.target.value })}
+                  placeholder="0"
+                  style={{ borderColor: 'var(--cui-primary)' }} />
               </CCol>
             </CRow>
           </CModalBody>

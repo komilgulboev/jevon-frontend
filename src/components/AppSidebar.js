@@ -11,8 +11,9 @@ import {
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { AppSidebarNav } from './AppSidebarNav'
-import { logo } from 'src/assets/brand/logo'
-import { sygnet } from 'src/assets/brand/sygnet'
+//import { logo } from 'src/assets/brand/logo'
+//import { sygnet } from 'src/assets/brand/sygnet'
+import jevonLogo from 'src/assets/brand/jevon-logo.png'
 import { useAuth } from '../AuthContext'
 import navigation from '../_nav'
 
@@ -61,10 +62,20 @@ const translatedNav = filteredNav.map((item) => {
       }}
     >
       <CSidebarHeader className="border-bottom">
-        <CSidebarBrand to="/">
-          <CIcon customClassName="sidebar-brand-full" icon={logo} height={32} />
-          <CIcon customClassName="sidebar-brand-narrow" icon={sygnet} height={32} />
-        </CSidebarBrand>
+<CSidebarBrand to="/">
+  <img
+    src={jevonLogo}
+    alt="Jevon"
+    className="sidebar-brand-full"
+    style={{ height: 64, width: '100%', objectFit: 'cover', objectPosition: 'center' }}
+  />
+  <img
+    src={jevonLogo}
+    alt="J"
+    className="sidebar-brand-narrow"
+    style={{ height: 44, width: 44, borderRadius: '50%', objectFit: 'cover' }}
+  />
+</CSidebarBrand>
         <CCloseButton
           className="d-lg-none"
           dark

@@ -1,387 +1,369 @@
-import React from 'react'
-import classNames from 'classnames'
+import { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { CSpinner, CAlert, CBadge, CFormSelect } from '@coreui/react'
+import api from '../../api/client'
+import { useAuth } from '../../AuthContext'
 
-import {
-  CAvatar,
-  CButton,
-  CButtonGroup,
-  CCard,
-  CCardBody,
-  CCardFooter,
-  CCardHeader,
-  CCol,
-  CProgress,
-  CRow,
-  CTable,
-  CTableBody,
-  CTableDataCell,
-  CTableHead,
-  CTableHeaderCell,
-  CTableRow,
-} from '@coreui/react'
-import CIcon from '@coreui/icons-react'
-import {
-  cibCcAmex,
-  cibCcApplePay,
-  cibCcMastercard,
-  cibCcPaypal,
-  cibCcStripe,
-  cibCcVisa,
-  cibGoogle,
-  cibFacebook,
-  cibLinkedin,
-  cifBr,
-  cifEs,
-  cifFr,
-  cifIn,
-  cifPl,
-  cifUs,
-  cibTwitter,
-  cilCloudDownload,
-  cilPeople,
-  cilUser,
-  cilUserFemale,
-} from '@coreui/icons'
+// Колонки этапов по типу заказа
+const CUTTING_STAGES = ['intake', 'material', 'sawing', 'edging', 'drilling', 'packing', 'shipment']
 
-import avatar1 from 'src/assets/images/avatars/1.jpg'
-import avatar2 from 'src/assets/images/avatars/2.jpg'
-import avatar3 from 'src/assets/images/avatars/3.jpg'
-import avatar4 from 'src/assets/images/avatars/4.jpg'
-import avatar5 from 'src/assets/images/avatars/5.jpg'
-import avatar6 from 'src/assets/images/avatars/6.jpg'
+const STAGE_COL_LABELS = {
+  intake:    'Конструкция',
+  material:  'Материал',
+  sawing:    'Распил',
+  edging:    'Кромка',
+  drilling:  'Присадка',
+  packing:   'Упаковка',
+  shipment:  'Отгрузка',
+}
 
-import WidgetsBrand from '../widgets/WidgetsBrand'
-import WidgetsDropdown from '../widgets/WidgetsDropdown'
-import MainChart from './MainChart'
+const STATUS_OPTIONS = [
+  { value: 'pending',     label: 'Ожидание' },
+  { value: 'in_progress', label: 'В процессе' },
+  { value: 'done',        label: 'Готово' },
+  { value: 'skipped',     label: 'Пропущено' },
+]
 
-const Dashboard = () => {
-  const progressExample = [
-    { title: 'Visits', value: '29.703 Users', percent: 40, color: 'success' },
-    { title: 'Unique', value: '24.093 Users', percent: 20, color: 'info' },
-    { title: 'Pageviews', value: '78.706 Views', percent: 60, color: 'warning' },
-    { title: 'New Users', value: '22.123 Users', percent: 80, color: 'danger' },
-    { title: 'Bounce Rate', value: 'Average Rate', percent: 40.15, color: 'primary' },
-  ]
+const STATUS_COLORS = {
+  done:        { bg: '#4CAF50', text: '#fff' },
+  in_progress: { bg: '#2196F3', text: '#fff' },
+  pending:     { bg: '#fff',    text: '#333' },
+  skipped:     { bg: '#9E9E9E', text: '#fff' },
+}
 
-  const progressGroupExample1 = [
-    { title: 'Monday', value1: 34, value2: 78 },
-    { title: 'Tuesday', value1: 56, value2: 94 },
-    { title: 'Wednesday', value1: 12, value2: 67 },
-    { title: 'Thursday', value1: 43, value2: 91 },
-    { title: 'Friday', value1: 22, value2: 73 },
-    { title: 'Saturday', value1: 53, value2: 82 },
-    { title: 'Sunday', value1: 9, value2: 69 },
-  ]
+const PAYMENT_COLORS = {
+  unpaid:  { bg: '#F44336', text: '#fff' },
+  partial: { bg: '#FF9800', text: '#fff' },
+  paid:    { bg: '#4CAF50', text: '#fff' },
+}
 
-  const progressGroupExample2 = [
-    { title: 'Male', icon: cilUser, value: 53 },
-    { title: 'Female', icon: cilUserFemale, value: 43 },
-  ]
+const PAYMENT_LABELS = {
+  unpaid:  'Не оплачен',
+  partial: 'Частично',
+  paid:    'Оплачен',
+}
 
-  const progressGroupExample3 = [
-    { title: 'Organic Search', icon: cibGoogle, percent: 56, value: '191,235' },
-    { title: 'Facebook', icon: cibFacebook, percent: 15, value: '51,223' },
-    { title: 'Twitter', icon: cibTwitter, percent: 11, value: '37,564' },
-    { title: 'LinkedIn', icon: cibLinkedin, percent: 8, value: '27,319' },
-  ]
+const ORDER_TYPE_LABELS = {
+  cutting:        'Распил',
+  workshop:       'Цех',
+  painting:       'Покраска',
+  cnc:            'ЧПУ',
+  soft_fabric:    'Мягкая ткань',
+  soft_furniture: 'Мягкая мебель',
+}
 
-  const tableExample = [
-    {
-      avatar: { src: avatar1, status: 'success' },
-      user: {
-        name: 'Yiorgos Avraamu',
-        new: true,
-        registered: 'Jan 1, 2023',
-      },
-      country: { name: 'USA', flag: cifUs },
-      usage: {
-        value: 50,
-        period: 'Jun 11, 2023 - Jul 10, 2023',
-        color: 'success',
-      },
-      payment: { name: 'Mastercard', icon: cibCcMastercard },
-      activity: '10 sec ago',
-    },
-    {
-      avatar: { src: avatar2, status: 'danger' },
-      user: {
-        name: 'Avram Tarasios',
-        new: false,
-        registered: 'Jan 1, 2023',
-      },
-      country: { name: 'Brazil', flag: cifBr },
-      usage: {
-        value: 22,
-        period: 'Jun 11, 2023 - Jul 10, 2023',
-        color: 'info',
-      },
-      payment: { name: 'Visa', icon: cibCcVisa },
-      activity: '5 minutes ago',
-    },
-    {
-      avatar: { src: avatar3, status: 'warning' },
-      user: { name: 'Quintin Ed', new: true, registered: 'Jan 1, 2023' },
-      country: { name: 'India', flag: cifIn },
-      usage: {
-        value: 74,
-        period: 'Jun 11, 2023 - Jul 10, 2023',
-        color: 'warning',
-      },
-      payment: { name: 'Stripe', icon: cibCcStripe },
-      activity: '1 hour ago',
-    },
-    {
-      avatar: { src: avatar4, status: 'secondary' },
-      user: { name: 'Enéas Kwadwo', new: true, registered: 'Jan 1, 2023' },
-      country: { name: 'France', flag: cifFr },
-      usage: {
-        value: 98,
-        period: 'Jun 11, 2023 - Jul 10, 2023',
-        color: 'danger',
-      },
-      payment: { name: 'PayPal', icon: cibCcPaypal },
-      activity: 'Last month',
-    },
-    {
-      avatar: { src: avatar5, status: 'success' },
-      user: {
-        name: 'Agapetus Tadeáš',
-        new: true,
-        registered: 'Jan 1, 2023',
-      },
-      country: { name: 'Spain', flag: cifEs },
-      usage: {
-        value: 22,
-        period: 'Jun 11, 2023 - Jul 10, 2023',
-        color: 'primary',
-      },
-      payment: { name: 'Google Wallet', icon: cibCcApplePay },
-      activity: 'Last week',
-    },
-    {
-      avatar: { src: avatar6, status: 'danger' },
-      user: {
-        name: 'Friderik Dávid',
-        new: true,
-        registered: 'Jan 1, 2023',
-      },
-      country: { name: 'Poland', flag: cifPl },
-      usage: {
-        value: 43,
-        period: 'Jun 11, 2023 - Jul 10, 2023',
-        color: 'success',
-      },
-      payment: { name: 'Amex', icon: cibCcAmex },
-      activity: 'Last week',
-    },
-  ]
+export default function Dashboard() {
+  const navigate    = useNavigate()
+  const { hasRole } = useAuth()
+  const canEdit     = hasRole('admin', 'supervisor', 'manager')
+
+  const [orders,  setOrders]  = useState([])
+  const [stages,  setStages]  = useState({}) // { order_id: [stages] }
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState('')
+  const [updating, setUpdating] = useState({}) // { stage_id: true }
+
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    try {
+      const ordersRes = await api.get('/orders', { params: { limit: 200 } })
+      const allOrders = (ordersRes.data.data || []).filter(o => o.status !== 'cancelled')
+      setOrders(allOrders)
+
+      // Загружаем этапы для каждого заказа параллельно
+      const stagesMap = {}
+      await Promise.all(
+        allOrders.map(async (order) => {
+          try {
+            const r = await api.get(`/orders/${order.id}/stages`)
+            stagesMap[order.id] = r.data.data || []
+          } catch {
+            stagesMap[order.id] = []
+          }
+        })
+      )
+      setStages(stagesMap)
+    } catch {
+      setError('Ошибка загрузки данных')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { loadData() }, [loadData])
+
+  const getStageStatus = (orderId, stageName) => {
+    const orderStages = stages[orderId] || []
+    const stage = orderStages.find(s => s.stage === stageName)
+    return stage || null
+  }
+
+  const handleStatusChange = async (orderId, stageId, newStatus) => {
+    if (!stageId) return
+    setUpdating(prev => ({ ...prev, [stageId]: true }))
+    try {
+      await api.patch(`/orders/${orderId}/stages/${stageId}`, { status: newStatus })
+      // Обновляем локально
+      setStages(prev => ({
+        ...prev,
+        [orderId]: (prev[orderId] || []).map(s =>
+          s.id === stageId ? { ...s, status: newStatus } : s
+        ),
+      }))
+    } catch {
+      setError('Ошибка обновления статуса')
+    } finally {
+      setUpdating(prev => ({ ...prev, [stageId]: false }))
+    }
+  }
+
+  const isDeadlineRed = (deadline) => {
+    if (!deadline) return false
+    return new Date(deadline) < new Date()
+  }
+
+  const isDeadlineYellow = (deadline) => {
+    if (!deadline) return false
+    const diff = new Date(deadline) - new Date()
+    return diff >= 0 && diff < 3 * 24 * 60 * 60 * 1000
+  }
+
+  if (loading) return (
+    <div className="d-flex justify-content-center align-items-center" style={{ minHeight: 300 }}>
+      <CSpinner color="primary" />
+    </div>
+  )
 
   return (
-    <>
-      <WidgetsDropdown className="mb-4" />
-      <CCard className="mb-4">
-        <CCardBody>
-          <CRow>
-            <CCol sm={5}>
-              <h4 id="traffic" className="card-title mb-0">
-                Traffic
-              </h4>
-              <div className="small text-body-secondary">January - July 2023</div>
-            </CCol>
-            <CCol sm={7} className="d-none d-md-block">
-              <CButton color="primary" className="float-end">
-                <CIcon icon={cilCloudDownload} />
-              </CButton>
-              <CButtonGroup className="float-end me-3">
-                {['Day', 'Month', 'Year'].map((value) => (
-                  <CButton
-                    color="outline-secondary"
-                    key={value}
-                    className="mx-0"
-                    active={value === 'Month'}
-                  >
-                    {value}
-                  </CButton>
-                ))}
-              </CButtonGroup>
-            </CCol>
-          </CRow>
-          <MainChart />
-        </CCardBody>
-        <CCardFooter>
-          <CRow
-            xs={{ cols: 1, gutter: 4 }}
-            sm={{ cols: 2 }}
-            lg={{ cols: 4 }}
-            xl={{ cols: 5 }}
-            className="mb-2 text-center"
-          >
-            {progressExample.map((item, index, items) => (
-              <CCol
-                className={classNames({
-                  'd-none d-xl-block': index + 1 === items.length,
-                })}
-                key={index}
-              >
-                <div className="text-body-secondary">{item.title}</div>
-                <div className="fw-semibold text-truncate">
-                  {item.value} ({item.percent}%)
-                </div>
-                <CProgress thin className="mt-2" color={item.color} value={item.percent} />
-              </CCol>
+    <div style={{ padding: '0 0 24px' }}>
+      {error && <CAlert color="danger" dismissible onClose={() => setError('')}>{error}</CAlert>}
+
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h5 className="mb-0 fw-bold">Производственный дашборд</h5>
+        <div className="small text-body-secondary">
+          Заказов: <strong>{orders.length}</strong>
+        </div>
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: 12,
+          tableLayout: 'fixed',
+          minWidth: 1100,
+        }}>
+          <colgroup>
+            <col style={{ width: 70 }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: 70 }} />
+            {CUTTING_STAGES.map(s => (
+              <col key={s} style={{ width: `${Math.floor(55 / CUTTING_STAGES.length)}%` }} />
             ))}
-          </CRow>
-        </CCardFooter>
-      </CCard>
-      <WidgetsBrand className="mb-4" withCharts />
-      <CRow>
-        <CCol xs>
-          <CCard className="mb-4">
-            <CCardHeader>Traffic {' & '} Sales</CCardHeader>
-            <CCardBody>
-              <CRow>
-                <CCol xs={12} md={6} xl={6}>
-                  <CRow>
-                    <CCol xs={6}>
-                      <div className="border-start border-start-4 border-start-info py-1 px-3">
-                        <div className="text-body-secondary text-truncate small">New Clients</div>
-                        <div className="fs-5 fw-semibold">9,123</div>
-                      </div>
-                    </CCol>
-                    <CCol xs={6}>
-                      <div className="border-start border-start-4 border-start-danger py-1 px-3 mb-3">
-                        <div className="text-body-secondary text-truncate small">
-                          Recurring Clients
-                        </div>
-                        <div className="fs-5 fw-semibold">22,643</div>
-                      </div>
-                    </CCol>
-                  </CRow>
-                  <hr className="mt-0" />
-                  {progressGroupExample1.map((item, index) => (
-                    <div className="progress-group mb-4" key={index}>
-                      <div className="progress-group-prepend">
-                        <span className="text-body-secondary small">{item.title}</span>
-                      </div>
-                      <div className="progress-group-bars">
-                        <CProgress thin color="info" value={item.value1} />
-                        <CProgress thin color="danger" value={item.value2} />
-                      </div>
+            <col style={{ width: 90 }} />
+            <col style={{ width: 85 }} />
+          </colgroup>
+
+          <thead>
+            <tr style={{ background: '#f5a623', color: '#fff' }}>
+              <th style={thStyle}>№ заказа</th>
+              <th style={thStyle}>Клиент (заказ)</th>
+              <th style={thStyle}>Тип</th>
+              {CUTTING_STAGES.map(s => (
+                <th key={s} style={thStyle}>{STAGE_COL_LABELS[s]}</th>
+              ))}
+              <th style={thStyle}>Срок</th>
+              <th style={thStyle}>Статус оплаты</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {orders.map((order, idx) => {
+              const deadlineRed    = isDeadlineRed(order.deadline)
+              const deadlineYellow = !deadlineRed && isDeadlineYellow(order.deadline)
+              const rowBg = idx % 2 === 0 ? '#fff' : '#fafafa'
+
+              return (
+                <tr key={order.id} style={{ background: rowBg, borderBottom: '1px solid #e0e0e0' }}>
+                  {/* № заказа */}
+                  <td style={{ ...tdStyle, textAlign: 'center' }}>
+                    <span
+                      onClick={() => navigate(`/orders/${order.id}`)}
+                      style={{ cursor: 'pointer', color: '#1976d2', fontWeight: 600, textDecoration: 'underline' }}
+                    >
+                      {order.order_number ? `03/${String(order.order_number).padStart(3, '0')}` : '—'}
+                    </span>
+                  </td>
+
+                  {/* Клиент */}
+                  <td style={{ ...tdStyle, maxWidth: 0 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                      {order.client_name || '—'}
                     </div>
-                  ))}
-                </CCol>
-                <CCol xs={12} md={6} xl={6}>
-                  <CRow>
-                    <CCol xs={6}>
-                      <div className="border-start border-start-4 border-start-warning py-1 px-3 mb-3">
-                        <div className="text-body-secondary text-truncate small">Pageviews</div>
-                        <div className="fs-5 fw-semibold">78,623</div>
+                    {order.client_phone && (
+                      <div style={{ fontSize: 11, color: '#666' }}>{order.client_phone}</div>
+                    )}
+                    {order.title && (
+                      <div style={{ fontSize: 11, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {order.title}
                       </div>
-                    </CCol>
-                    <CCol xs={6}>
-                      <div className="border-start border-start-4 border-start-success py-1 px-3 mb-3">
-                        <div className="text-body-secondary text-truncate small">Organic</div>
-                        <div className="fs-5 fw-semibold">49,123</div>
-                      </div>
-                    </CCol>
-                  </CRow>
+                    )}
+                  </td>
 
-                  <hr className="mt-0" />
+                  {/* Тип */}
+                  <td style={{ ...tdStyle, textAlign: 'center' }}>
+                    <span style={{ fontSize: 10, color: '#666' }}>
+                      {ORDER_TYPE_LABELS[order.order_type] || order.order_type}
+                    </span>
+                  </td>
 
-                  {progressGroupExample2.map((item, index) => (
-                    <div className="progress-group mb-4" key={index}>
-                      <div className="progress-group-header">
-                        <CIcon className="me-2" icon={item.icon} size="lg" />
-                        <span>{item.title}</span>
-                        <span className="ms-auto fw-semibold">{item.value}%</span>
-                      </div>
-                      <div className="progress-group-bars">
-                        <CProgress thin color="warning" value={item.value} />
-                      </div>
-                    </div>
-                  ))}
+                  {/* Этапы */}
+                  {CUTTING_STAGES.map(stageName => {
+                    const stageObj = getStageStatus(order.id, stageName)
+                    const status   = stageObj?.status || 'pending'
+                    const colors   = STATUS_COLORS[status] || STATUS_COLORS.pending
+                    const isUpdating = stageObj && updating[stageObj.id]
 
-                  <div className="mb-5"></div>
+                    // Если этапа нет у этого заказа — серая ячейка
+                    if (!stageObj) {
+                      return (
+                        <td key={stageName} style={{ ...tdStyle, textAlign: 'center' }}>
+                          <span style={{ color: '#ccc', fontSize: 11 }}>—</span>
+                        </td>
+                      )
+                    }
 
-                  {progressGroupExample3.map((item, index) => (
-                    <div className="progress-group" key={index}>
-                      <div className="progress-group-header">
-                        <CIcon className="me-2" icon={item.icon} size="lg" />
-                        <span>{item.title}</span>
-                        <span className="ms-auto fw-semibold">
-                          {item.value}{' '}
-                          <span className="text-body-secondary small">({item.percent}%)</span>
-                        </span>
-                      </div>
-                      <div className="progress-group-bars">
-                        <CProgress thin color="success" value={item.percent} />
-                      </div>
-                    </div>
-                  ))}
-                </CCol>
-              </CRow>
-
-              <br />
-
-              <CTable align="middle" className="mb-0 border" hover responsive>
-                <CTableHead className="text-nowrap">
-                  <CTableRow>
-                    <CTableHeaderCell className="bg-body-tertiary text-center">
-                      <CIcon icon={cilPeople} />
-                    </CTableHeaderCell>
-                    <CTableHeaderCell className="bg-body-tertiary">User</CTableHeaderCell>
-                    <CTableHeaderCell className="bg-body-tertiary text-center">
-                      Country
-                    </CTableHeaderCell>
-                    <CTableHeaderCell className="bg-body-tertiary">Usage</CTableHeaderCell>
-                    <CTableHeaderCell className="bg-body-tertiary text-center">
-                      Payment Method
-                    </CTableHeaderCell>
-                    <CTableHeaderCell className="bg-body-tertiary">Activity</CTableHeaderCell>
-                  </CTableRow>
-                </CTableHead>
-                <CTableBody>
-                  {tableExample.map((item, index) => (
-                    <CTableRow v-for="item in tableItems" key={index}>
-                      <CTableDataCell className="text-center">
-                        <CAvatar size="md" src={item.avatar.src} status={item.avatar.status} />
-                      </CTableDataCell>
-                      <CTableDataCell>
-                        <div>{item.user.name}</div>
-                        <div className="small text-body-secondary text-nowrap">
-                          <span>{item.user.new ? 'New' : 'Recurring'}</span> | Registered:{' '}
-                          {item.user.registered}
-                        </div>
-                      </CTableDataCell>
-                      <CTableDataCell className="text-center">
-                        <CIcon size="xl" icon={item.country.flag} title={item.country.name} />
-                      </CTableDataCell>
-                      <CTableDataCell>
-                        <div className="d-flex justify-content-between text-nowrap">
-                          <div className="fw-semibold">{item.usage.value}%</div>
-                          <div className="ms-3">
-                            <small className="text-body-secondary">{item.usage.period}</small>
+                    return (
+                      <td key={stageName} style={{ ...tdStyle, padding: '2px 4px' }}>
+                        {canEdit ? (
+                          <div style={{ position: 'relative' }}>
+                            <select
+                              value={status}
+                              disabled={isUpdating}
+                              onChange={e => handleStatusChange(order.id, stageObj.id, e.target.value)}
+                              style={{
+                                width: '100%',
+                                border: 'none',
+                                borderRadius: 4,
+                                padding: '3px 4px',
+                                fontSize: 11,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                background: colors.bg,
+                                color: colors.text,
+                                appearance: 'none',
+                                WebkitAppearance: 'none',
+                                textAlign: 'center',
+                                outline: 'none',
+                              }}
+                            >
+                              {STATUS_OPTIONS.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                            {isUpdating && (
+                              <div style={{ position: 'absolute', top: 0, right: 2, bottom: 0, display: 'flex', alignItems: 'center' }}>
+                                <CSpinner size="sm" style={{ width: 10, height: 10 }} />
+                              </div>
+                            )}
                           </div>
+                        ) : (
+                          <div style={{
+                            background: colors.bg, color: colors.text,
+                            borderRadius: 4, padding: '3px 6px',
+                            textAlign: 'center', fontSize: 11, fontWeight: 600,
+                            border: status === 'pending' ? '1px solid #ddd' : 'none',
+                          }}>
+                            {STATUS_OPTIONS.find(o => o.value === status)?.label || status}
+                          </div>
+                        )}
+                      </td>
+                    )
+                  })}
+
+                  {/* Срок */}
+                  <td style={{
+                    ...tdStyle, textAlign: 'center', fontWeight: 600,
+                    color: deadlineRed ? '#F44336' : deadlineYellow ? '#FF9800' : '#333',
+                    background: deadlineRed ? '#FFEBEE' : deadlineYellow ? '#FFF3E0' : 'transparent',
+                  }}>
+                    {order.deadline
+                      ? new Date(order.deadline).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+                      : '—'}
+                  </td>
+
+                  {/* Статус оплаты */}
+                  <td style={{ ...tdStyle, textAlign: 'center' }}>
+                    {(() => {
+                      const pc = PAYMENT_COLORS[order.payment_status] || { bg: '#9E9E9E', text: '#fff' }
+                      return (
+                        <div style={{
+                          background: pc.bg, color: pc.text,
+                          borderRadius: 4, padding: '3px 6px',
+                          fontSize: 11, fontWeight: 600, textAlign: 'center',
+                        }}>
+                          {PAYMENT_LABELS[order.payment_status] || order.payment_status}
                         </div>
-                        <CProgress thin color={item.usage.color} value={item.usage.value} />
-                      </CTableDataCell>
-                      <CTableDataCell className="text-center">
-                        <CIcon size="xl" icon={item.payment.icon} />
-                      </CTableDataCell>
-                      <CTableDataCell>
-                        <div className="small text-body-secondary text-nowrap">Last login</div>
-                        <div className="fw-semibold text-nowrap">{item.activity}</div>
-                      </CTableDataCell>
-                    </CTableRow>
-                  ))}
-                </CTableBody>
-              </CTable>
-            </CCardBody>
-          </CCard>
-        </CCol>
-      </CRow>
-    </>
+                      )
+                    })()}
+                  </td>
+                </tr>
+              )
+            })}
+
+            {orders.length === 0 && (
+              <tr>
+                <td colSpan={CUTTING_STAGES.length + 5} style={{ textAlign: 'center', padding: 40, color: '#999' }}>
+                  Нет заказов
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Легенда */}
+      <div className="d-flex gap-3 mt-3 flex-wrap">
+        {STATUS_OPTIONS.map(opt => {
+          const c = STATUS_COLORS[opt.value]
+          return (
+            <div key={opt.value} className="d-flex align-items-center gap-1">
+              <div style={{ width: 14, height: 14, borderRadius: 3, background: c.bg, border: opt.value === 'pending' ? '1px solid #ddd' : 'none' }} />
+              <span style={{ fontSize: 11, color: '#666' }}>{opt.label}</span>
+            </div>
+          )
+        })}
+        <div className="d-flex align-items-center gap-1">
+          <div style={{ width: 14, height: 14, borderRadius: 3, background: '#FFEBEE' }} />
+          <span style={{ fontSize: 11, color: '#666' }}>Просрочен</span>
+        </div>
+        <div className="d-flex align-items-center gap-1">
+          <div style={{ width: 14, height: 14, borderRadius: 3, background: '#FFF3E0' }} />
+          <span style={{ fontSize: 11, color: '#666' }}>Срок &lt; 3 дней</span>
+        </div>
+      </div>
+    </div>
   )
 }
 
-export default Dashboard
+const thStyle = {
+  padding: '10px 6px',
+  fontWeight: 800,
+  fontSize: 12,
+  textAlign: 'center',
+  border: '1px solid #c8850a',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  color: '#000',
+  letterSpacing: 0.3,
+  textTransform: 'uppercase',
+  boxShadow: 'inset 0 -2px 0 rgba(0,0,0,0.15)',
+}
+
+const tdStyle = {
+  padding: '5px 6px',
+  border: '1px solid #e0e0e0',
+  verticalAlign: 'middle',
+  fontSize: 12,
+}

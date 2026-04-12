@@ -7,12 +7,14 @@ export default defineConfig(() => {
   return {
     base: './',
     build: {
-      outDir: 'build',
+      // Собираем в папку бэкенда — Go встроит в бинарник
+      outDir: '../jevon-backend/cmd/api/web',
+      emptyOutDir: true,
     },
     css: {
       postcss: {
         plugins: [
-          autoprefixer({}), // add options if needed
+          autoprefixer({}),
         ],
       },
     },
@@ -42,7 +44,10 @@ export default defineConfig(() => {
     server: {
       port: 3000,
       proxy: {
-        // https://vitejs.dev/config/server-options.html
+        '/api': {
+          target: 'http://localhost:8181',
+          changeOrigin: true,
+        },
       },
     },
   }

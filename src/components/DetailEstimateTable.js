@@ -3,205 +3,308 @@ import {
   CButton, CSpinner, CAlert, CBadge,
   CModal, CModalHeader, CModalTitle, CModalBody, CModalFooter,
   CFormInput, CFormLabel, CRow, CCol,
-  CNav, CNavItem, CNavLink,
+  CTable, CTableHead, CTableBody, CTableRow,
+  CTableHeaderCell, CTableDataCell,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilPlus, cilSave, cilPrint, cilTrash } from '@coreui/icons'
+import { cilPlus, cilSave, cilTrash, cilClipboard } from '@coreui/icons'
 import api from '../api/client'
 import EstimateTable from './EstimateTable'
 
 // ── Константы ─────────────────────────────────────────────
 
 const SERVICE_TYPES = [
-  { key:'cnc',      label:'ЧПУ',           color:'info',    subtitle:'От идеи к идеальной детали.' },
-  { key:'painting', label:'Покраска',       color:'danger',  subtitle:'От эскиза до идеального цвета.' },
-  { key:'soft',     label:'Мягкая мебель',  color:'success', subtitle:'От идеи к идеальной детали.' },
-  { key:'cutting',  label:'Распил',         color:'warning', subtitle:'От чертежа до готовой детали.' },
+  { key: 'cutting',  label: 'Распил',        color: '#ff9800', subtitle: 'От чертежа до готовой детали.' },
+  { key: 'cnc',      label: 'ЧПУ',           color: '#2196f3', subtitle: 'От идеи к идеальной детали.' },
+  { key: 'painting', label: 'Покраска',       color: '#f44336', subtitle: 'От эскиза до идеального цвета.' },
+  { key: 'soft',     label: 'Мягкая мебель',  color: '#4caf50', subtitle: 'От идеи к идеальной детали.' },
 ]
 
 const DEFAULT_ROWS = 20
 
-const emptyRow = () => ({
-  _id:        Math.random().toString(36).slice(2),
-  detail_name:'',
-  width_mm:   '',
-  height_mm:  '',
-  quantity:   1,
-  area_m2:    '',
-  unit_price: '',
-  total_price:'',
-  _dirty:     false,
-})
-
-// ── Печать накладной ──────────────────────────────────────
-
-function printDetailEstimate(order, serviceType, settings, rows, totalM2, totalPrice, payments) {
-  const svcDef = SERVICE_TYPES.find(s => s.key === serviceType)
-  const filled = rows.filter(r => r.detail_name.trim())
-  const paidAmount  = payments?.reduce((s, p) => s + (p.amount || 0), 0) || 0
-  const remaining   = totalPrice - paidAmount
-
-  const trs = filled.map((r, i) => `
-    <tr>
-      <td class="num">${i+1}</td>
-      <td class="name">${r.detail_name}</td>
-      <td class="center">${r.area_m2 > 0 ? Number(r.area_m2).toFixed(2) : ''}</td>
-      <td class="right">${r.unit_price > 0 ? Number(r.unit_price).toLocaleString() : ''}</td>
-      <td class="right bold">${r.total_price > 0 ? Number(r.total_price).toFixed(2) : ''}</td>
-    </tr>`).join('')
-
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${svcDef?.label || ''} №${order?.order_number}</title>
-<style>
-* { box-sizing:border-box; margin:0; padding:0; }
-body { font-family:Arial,sans-serif; font-size:10pt; color:#000; background:#fff; }
-.page { width:148mm; margin:0 auto; padding:8mm; }
-.header { text-align:center; margin-bottom:3mm; }
-.header h1 { font-size:13pt; font-weight:bold; letter-spacing:1px; }
-.header p  { font-size:8.5pt; font-style:italic; }
-.info-table { width:100%; border-collapse:collapse; margin-bottom:3mm; font-size:9pt; }
-.info-table td { border:1px solid #000; padding:1.5mm 2.5mm; }
-.info-table .label { font-weight:bold; white-space:nowrap; }
-h2 { font-size:9.5pt; font-weight:bold; text-align:center;
-     border:1px solid #000; border-bottom:none;
-     padding:1.5mm; background:#e8e8e8 !important;
-     -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-table.main { width:100%; border-collapse:collapse; margin-bottom:3mm; }
-table.main th,table.main td { border:1px solid #000 !important; padding:1.5mm 2mm; font-size:9pt; }
-table.main th { background:#d8d8d8 !important; text-align:center; font-weight:bold;
-  -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-.num   { text-align:center; width:7mm; }
-.name  { text-align:left; }
-.center{ text-align:center; }
-.right { text-align:right; }
-.bold  { font-weight:bold; }
-tr:nth-child(even) { background:#fafafa !important;
-  -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-.total-row td { font-weight:bold; background:#e0e0e0 !important;
-  border-top:2px solid #000 !important;
-  -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-.payment-box { border:1px solid #000; margin-top:3mm; font-size:9pt; }
-.payment-box table { width:100%; border-collapse:collapse; }
-.payment-box td { padding:1.5mm 3mm; }
-.payment-box .title { background:#e8e8e8 !important; text-align:center; font-weight:bold;
-  -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-.payment-num { border:2px solid #000; float:right; padding:3mm 5mm; font-size:9pt; margin-top:-20mm; }
-.payment-num b { font-size:11pt; }
-.print-btn { display:block; width:148mm; margin:10px auto;
-  padding:10px; background:#1a73e8; color:white;
-  border:none; border-radius:6px; font-size:14px; cursor:pointer; }
-@media screen {
-  body { background:#888; padding:10px 0 30px; }
-  .page { background:#fff; box-shadow:0 3px 20px rgba(0,0,0,0.4); min-height:210mm; }
-}
-@media print {
-  @page { size:A5 portrait; margin:0; }
-  body { background:#fff; }
-  .page { padding:7mm; box-shadow:none; }
-  .print-btn { display:none; }
-}
-</style></head><body>
-<button class="print-btn" onclick="window.print()">🖨️ Распечатать</button>
-<div class="page">
-  <div class="header">
-    <h1>JEVON</h1>
-    <p>${settings?.section_subtitle || svcDef?.subtitle || ''}</p>
-  </div>
-
-  <table class="info-table">
-    <tr>
-      <td class="label" style="width:22mm">${order?.order_number || '—'}</td>
-      <td>${order?.client_name || '—'}${order?.client_phone ? ' ' + order.client_phone : ''}</td>
-      <td class="label" style="width:14mm">Дата:</td>
-      <td style="width:22mm">${new Date().toLocaleDateString('ru-RU')}</td>
-    </tr>
-    <tr>
-      <td class="label">Мебель:</td>
-      <td>${order?.title || ''}${settings?.notes ? ' ' + settings.notes : ''}</td>
-      <td class="label">Срок:</td>
-      <td>${settings?.deadline || ''}</td>
-    </tr>
-    ${settings?.delivery_date ? `
-    <tr>
-      <td></td><td></td>
-      <td class="label">Дата сдачи:</td>
-      <td>${settings.delivery_date}</td>
-    </tr>` : ''}
-  </table>
-
-  <h2>Наименование и размеры деталей</h2>
-  <table class="main">
-    <thead><tr>
-      <th class="num">№</th>
-      <th>Наименование и размеры деталей</th>
-      <th style="width:14mm">м²</th>
-      <th style="width:22mm">Цена за ед.</th>
-      <th style="width:24mm">Общая сумма</th>
-    </tr></thead>
-    <tbody>
-      ${trs}
-      <tr class="total-row">
-        <td colspan="2" class="right">Итого:</td>
-        <td class="center">${totalM2.toFixed(2)}</td>
-        <td></td>
-        <td class="right">${totalPrice.toFixed(2)}</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <div class="payment-box">
-    <table>
-      <tr><td colspan="2" class="title">Итого к оплате:</td></tr>
-      <tr>
-        <td>Стоимость Услуги:</td>
-        <td><b>${totalPrice.toFixed(2)} смн</b></td>
-      </tr>
-      <tr><td style="border-top:1px solid #ccc">Оплатили:</td>
-          <td style="border-top:1px solid #ccc"><b>${paidAmount.toFixed(2)} смн</b></td></tr>
-      <tr><td>Остаток:</td>
-          <td><b>${remaining.toFixed(2)} смн</b></td></tr>
-    </table>
-  </div>
-
-  <div style="margin-top:3mm;float:right;border:2px solid #000;padding:2mm 4mm;font-size:9pt;text-align:center">
-    <div style="font-size:8pt">Номер для оплаты:</div>
-    <b style="font-size:10pt">940008000</b>
-  </div>
-</div></body></html>`
-
-  const w = window.open('', '_blank')
-  w.document.write(html)
-  w.document.close()
-  w.focus()
+// Коэффициенты расхода по категории продукта (г/м²)
+const PAINT_CATEGORY_RATES = {
+  'КРАСКА': 0.35,
+  'Краска': 0.35,
+  'Кра':    0.35,   // неполное название
+  'ГРУНТ':  0.45,
+  'Грунт':  0.45,
+  'ЛАК':    0.25,
+  'Лак':    0.25,
 }
 
-// ── Строка таблицы ────────────────────────────────────────
+// Нормализуем категорию к единому ключу
+function normalizeCategory(cat) {
+  if (!cat) return null
+  const c = cat.trim()
+  if (c.toUpperCase().startsWith('КРА')) return 'Краска'
+  if (c.toUpperCase().startsWith('ГРУ')) return 'Грунт'
+  if (c.toUpperCase().startsWith('ЛАК')) return 'Лак'
+  return null
+}
+
+function getCategoryRate(cat) {
+  const norm = normalizeCategory(cat)
+  if (norm === 'Краска') return 0.35
+  if (norm === 'Грунт')  return 0.45
+  if (norm === 'Лак')    return 0.25
+  return null
+}
+
+const CATEGORY_LABELS = {
+  'Краска': { label: 'Краска', color: '#f44336', bg: '#ffebee' },
+  'Грунт':  { label: 'Грунт',  color: '#ff9800', bg: '#fff3e0' },
+  'Лак':    { label: 'Лак',    color: '#9c27b0', bg: '#f3e5f5' },
+}
+
+// Строит перечень позиций заявки из строк Покраски
+async function buildInvoiceItemsFromRows(rows) {
+  // Загружаем номенклатуру
+  const warehouseRes = await api.get('/warehouse/items')
+  const wItems = warehouseRes.data.data || []
+
+  const totalArea = rows.reduce((s, r) => s + (parseFloat(r.area_m2) || 0), 0)
+
+  // Группируем Краску по product_id
+  const paintGrouped = {}
+  for (const row of rows) {
+    if (!row.product_id) continue
+    const area = parseFloat(row.area_m2) || 0
+    if (area <= 0) continue
+    const wItem = wItems.find(i => i.id === row.product_id)
+    const category = row.product_category || wItem?.category || ''
+    const norm = normalizeCategory(category)
+    if (norm !== 'Краска') continue
+    if (!paintGrouped[row.product_id]) {
+      paintGrouped[row.product_id] = {
+        item_id:    row.product_id,
+        item_name:  row.product_name || wItem?.name || '—',
+        category:   'Краска',
+        unit:       wItem?.unit || 'кг',
+        total_area: 0,
+        sale_price: wItem?.sale_price || 0,
+        no_item:    !wItem,
+      }
+    }
+    paintGrouped[row.product_id].total_area += area
+  }
+
+  const result = []
+
+  // Краска по продуктам
+  for (const g of Object.values(paintGrouped)) {
+    const qty = parseFloat((g.total_area * 0.35).toFixed(3))
+    if (qty > 0) result.push({
+      item_id:    g.item_id,
+      item_name:  g.item_name,
+      unit:       g.unit,
+      quantity:   qty,
+      sale_price: g.sale_price,
+      category:   'Краска',
+      area_info:  `${g.total_area.toFixed(2)} м² × 0.35 кг/м²`,
+      no_item:    g.no_item,
+    })
+  }
+
+  if (totalArea > 0) {
+    // Грунт
+    const gruntItem = wItems.find(i => normalizeCategory(i.category) === 'Грунт')
+    result.push({
+      item_id:    gruntItem?.id   || '',
+      item_name:  gruntItem?.name || 'Грунт',
+      unit:       gruntItem?.unit || 'кг',
+      quantity:   parseFloat((totalArea * 0.45).toFixed(3)),
+      sale_price: gruntItem?.sale_price || 0,
+      category:   'Грунт',
+      area_info:  `${totalArea.toFixed(2)} м² × 0.45 кг/м²`,
+      no_item:    !gruntItem,
+    })
+    // Лак
+    const lakItem = wItems.find(i => normalizeCategory(i.category) === 'Лак')
+    result.push({
+      item_id:    lakItem?.id   || '',
+      item_name:  lakItem?.name || 'Лак',
+      unit:       lakItem?.unit || 'кг',
+      quantity:   parseFloat((totalArea * 0.25).toFixed(3)),
+      sale_price: lakItem?.sale_price || 0,
+      category:   'Лак',
+      area_info:  `${totalArea.toFixed(2)} м² × 0.25 кг/м²`,
+      no_item:    !lakItem,
+    })
+  }
+
+  return result
+}
+
+// ── Вспомогательные функции ───────────────────────────────
+
+function emptyRow() {
+  return {
+    _id:          Math.random().toString(36).slice(2),
+    detail_name:  '',
+    width_mm:     '',
+    height_mm:    '',
+    quantity:     1,
+    area_m2:      '',
+    unit_price:   '',
+    total_price:  '',
+    product_id:       '',
+    product_name:     '',
+    product_category: '',
+    _dirty:           false,
+  }
+}
 
 function calcRow(row) {
-  const w = parseFloat(row.width_mm)  || 0
-  const h = parseFloat(row.height_mm) || 0
-  const q = parseInt(row.quantity)    || 1
-  const p = parseFloat(row.unit_price)|| 0
+  const w = parseFloat(row.width_mm)
+  const h = parseFloat(row.height_mm)
+  const q = parseInt(row.quantity) || 1
+  const p = parseFloat(row.unit_price)
   const area  = w > 0 && h > 0 ? Math.round(w / 1000 * h / 1000 * q * 10000) / 10000 : 0
   const total = area > 0 && p > 0 ? Math.round(area * p * 100) / 100 : 0
   return { area_m2: area || '', total_price: total || '' }
 }
 
-// ── Секция одного типа услуги ─────────────────────────────
+// ── Блок расхода продукта (только для Покраска) ───────────
 
-function ServiceSection({ serviceType, orderId, order, payments, canEdit }) {
-  const svcDef  = SERVICE_TYPES.find(s => s.key === serviceType)
+function PaintConsumptionBlock({ rows }) {
+  // Общая площадь всех заполненных строк (для Лак и Грунт)
+  const totalArea = rows.reduce((s, r) => s + (parseFloat(r.area_m2) || 0), 0)
+
+  // Площадь по выбранным продуктам категории Краска
+  const paintGrouped = {}
+  for (const row of rows) {
+    if (!row.product_id) continue
+    const area = parseFloat(row.area_m2) || 0
+    if (area <= 0) continue
+    const norm = normalizeCategory(row.product_category || '')
+    if (norm !== 'Краска') continue
+    if (!paintGrouped[row.product_id]) {
+      paintGrouped[row.product_id] = {
+        product_id:   row.product_id,
+        product_name: row.product_name || '—',
+        total_area:   0,
+      }
+    }
+    paintGrouped[row.product_id].total_area += area
+  }
+  const paintItems = Object.values(paintGrouped)
+
+  if (totalArea <= 0) return null
+
+  const fixedItems = [
+    { key: 'grunt', label: 'Грунт', rate: 0.45, ...CATEGORY_LABELS['Грунт'], area: totalArea },
+    { key: 'lak',   label: 'Лак',   rate: 0.25, ...CATEGORY_LABELS['Лак'],   area: totalArea },
+  ]
+
+  const Chip = ({ label, catMeta, area, rate, productName }) => {
+    const areaStr   = parseFloat(area.toFixed(2)).toString()
+    const resultStr = parseFloat((area * rate).toFixed(2)).toString()
+    return (
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 0,
+        background: catMeta.bg,
+        border: `1px solid ${catMeta.color}44`,
+        borderRadius: 20,
+        padding: '4px 12px',
+        fontSize: 13,
+      }}>
+        {productName && (
+          <span style={{ fontWeight: 600, color: 'var(--cui-body-color)', marginRight: 4 }}>{productName}</span>
+        )}
+        <span style={{
+          background: catMeta.color, color: '#fff',
+          borderRadius: 10, padding: '1px 7px', fontSize: 11, fontWeight: 600,
+          marginRight: 2,
+        }}>{label}</span>
+        <span style={{ color: 'var(--cui-secondary-color)', fontSize: 12 }}>
+          {areaStr} м²×{rate}кг={resultStr}кг
+        </span>
+      </div>
+    )
+  }
+
+  const Divider = () => (
+    <span style={{ color: 'var(--cui-secondary-color)', fontSize: 16, margin: '0 2px', opacity: 0.4 }}>|</span>
+  )
+
+  return (
+    <div style={{
+      background: 'var(--cui-secondary-bg)',
+      border: '1px solid var(--cui-border-color)',
+      borderRadius: 6,
+      padding: '10px 14px',
+      marginBottom: 10,
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 8,
+      alignItems: 'center',
+    }}>
+      <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--cui-body-color)', marginRight: 2 }}>
+        🎨 Расход:
+      </span>
+
+      {/* 1. Разбивка по названиям продуктов краски */}
+      {paintItems.length > 0 && (
+        <>
+          {paintItems.map(item => (
+            <Chip
+              key={item.product_id}
+              label="Краска"
+              catMeta={CATEGORY_LABELS['Краска']}
+              area={item.total_area}
+              rate={0.35}
+              productName={item.product_name}
+            />
+          ))}
+          <Divider />
+        </>
+      )}
+
+      {/* 2. Грунт и Лак — по общей площади */}
+      {fixedItems.map(item => (
+        <Chip key={item.key} label={item.label} catMeta={item} area={item.area} rate={item.rate} />
+      ))}
+    </div>
+  )
+}
+
+// ── Одна секция (ЧПУ / Покраска / Мягкая мебель) ─────────
+
+function ServiceSection({ serviceType, orderId, order, canEdit }) {
+  const isPainting = serviceType === 'painting'
+
   const [rows,     setRows]     = useState(() => Array.from({ length: DEFAULT_ROWS }, emptyRow))
-  const [settings, setSettings] = useState({
-    section_title: '', section_subtitle: svcDef?.subtitle || '',
-    deadline: '', delivery_date: '', notes: '',
-  })
+  const [settings, setSettings] = useState({ section_subtitle: '', deadline: '', delivery_date: '', notes: '' })
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState('')
   const [success,  setSuccess]  = useState(false)
-  const [loaded,   setLoaded]   = useState(false)
+
+  // Заявка со склада
+  const [invoiceModal,   setInvoiceModal]   = useState(false)
+  const [invoiceItems,   setInvoiceItems]   = useState([])
+  const [invoiceLoading, setInvoiceLoading] = useState(false)
+  const [invoiceSaving,  setInvoiceSaving]  = useState(false)
+  const [invoiceError,   setInvoiceError]   = useState('')
+  const [invoiceSuccess, setInvoiceSuccess] = useState(false)
+
+  // Для Покраски — список продуктов из номенклатуры
+  const [products,        setProducts]        = useState([])
+  const [productsLoading, setProductsLoading] = useState(false)
+  const [productSearch,   setProductSearch]   = useState({})
+  const [productDropdown, setProductDropdown] = useState(null)
+
+  useEffect(() => {
+    if (!isPainting) return
+    setProductsLoading(true)
+    api.get('/warehouse/items')
+      .then(r => {
+        const d = r.data
+        setProducts(Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.items) ? d.items : [])
+      })
+      .catch(() => setProducts([]))
+      .finally(() => setProductsLoading(false))
+  }, [isPainting])
 
   const load = useCallback(async () => {
     try {
@@ -211,8 +314,7 @@ function ServiceSection({ serviceType, orderId, order, payments, canEdit }) {
       if (sec) {
         if (sec.settings) {
           setSettings({
-            section_title:    sec.settings.section_title    || '',
-            section_subtitle: sec.settings.section_subtitle || svcDef?.subtitle || '',
+            section_subtitle: sec.settings.section_subtitle || '',
             deadline:         sec.settings.deadline         || '',
             delivery_date:    sec.settings.delivery_date    || '',
             notes:            sec.settings.notes            || '',
@@ -220,25 +322,37 @@ function ServiceSection({ serviceType, orderId, order, payments, canEdit }) {
         }
         if (sec.rows?.length > 0) {
           const filled = sec.rows.map(r => ({
-            _id:        r.id,
-            detail_name:r.detail_name,
-            width_mm:   r.width_mm   || '',
-            height_mm:  r.height_mm  || '',
-            quantity:   r.quantity   || 1,
-            area_m2:    r.area_m2    || '',
-            unit_price: r.unit_price || '',
-            total_price:r.total_price|| '',
-            _dirty:     false,
+            _id:          r.id || Math.random().toString(36).slice(2),
+            detail_name:  r.detail_name  || '',
+            width_mm:     r.width_mm     || '',
+            height_mm:    r.height_mm    || '',
+            quantity:     r.quantity     || 1,
+            area_m2:      r.area_m2      || '',
+            unit_price:   r.unit_price   || '',
+            total_price:  r.total_price  || '',
+            product_id:       r.product_id   || '',
+            product_name:     r.product_name || '',
+            product_category: r.product_category || '',
+            _dirty:       false,
           }))
           const empty = Math.max(0, DEFAULT_ROWS - filled.length)
           setRows([...filled, ...Array.from({ length: empty }, emptyRow)])
         }
       }
     } catch {}
-    setLoaded(true)
   }, [orderId, serviceType])
 
   useEffect(() => { load() }, [load])
+
+  // Когда products загрузились — обогащаем строки категорией
+  useEffect(() => {
+    if (products.length === 0) return
+    setRows(prev => prev.map(row => {
+      if (!row.product_id || row.product_category) return row
+      const prod = products.find(p => p.id === row.product_id)
+      return prod ? { ...row, product_category: prod.category || '' } : row
+    }))
+  }, [products])
 
   const updateRow = (idx, field, value) => {
     setRows(prev => {
@@ -260,6 +374,25 @@ function ServiceSection({ serviceType, orderId, order, payments, canEdit }) {
     })
   }
 
+  // Выбор продукта
+  const selectProduct = (rowIdx, prod) => {
+    setRows(prev => {
+      const next = [...prev]
+      next[rowIdx] = { ...next[rowIdx], product_id: prod.id, product_name: prod.name, product_category: prod.category || '', _dirty: true }
+      return next
+    })
+    setProductDropdown(null)
+    setProductSearch(prev => ({ ...prev, [rowIdx]: '' }))
+  }
+
+  const clearProduct = (rowIdx) => {
+    setRows(prev => {
+      const next = [...prev]
+      next[rowIdx] = { ...next[rowIdx], product_id: '', product_name: '', product_category: '', _dirty: true }
+      return next
+    })
+  }
+
   const save = async () => {
     setSaving(true)
     setError('')
@@ -267,11 +400,13 @@ function ServiceSection({ serviceType, orderId, order, payments, canEdit }) {
       const rowsToSave = rows
         .filter(r => r.detail_name.trim())
         .map(r => ({
-          detail_name: r.detail_name.trim(),
-          width_mm:    parseFloat(r.width_mm)   || 0,
-          height_mm:   parseFloat(r.height_mm)  || 0,
-          quantity:    parseInt(r.quantity)      || 1,
-          unit_price:  parseFloat(r.unit_price)  || 0,
+          detail_name:  r.detail_name.trim(),
+          width_mm:     parseFloat(r.width_mm)  || 0,
+          height_mm:    parseFloat(r.height_mm) || 0,
+          quantity:     parseInt(r.quantity)    || 1,
+          unit_price:   parseFloat(r.unit_price) || 0,
+          product_id:   r.product_id   || '',
+          product_name: r.product_name || '',
         }))
       await api.post(`/orders/${orderId}/detail-estimate`, {
         service_type: serviceType,
@@ -279,217 +414,488 @@ function ServiceSection({ serviceType, orderId, order, payments, canEdit }) {
         rows: rowsToSave,
       })
       setSuccess(true)
-      setTimeout(() => setSuccess(false), 3000)
-      await load()
-    } catch { setError('Ошибка сохранения') }
-    finally  { setSaving(false) }
+      setTimeout(() => setSuccess(false), 2000)
+      load()
+    } catch (e) {
+      setError(e.response?.data?.error || 'Ошибка сохранения')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const totalM2    = rows.reduce((s, r) => s + (parseFloat(r.area_m2)    || 0), 0)
+  const openInvoiceModal = async () => {
+    setInvoiceError('')
+    setInvoiceSuccess(false)
+    setInvoiceItems([])
+    setInvoiceModal(true)
+    setInvoiceLoading(true)
+    try {
+      const items = await buildInvoiceItemsFromRows(rows)
+      setInvoiceItems(items)
+    } catch {
+      setInvoiceError('Ошибка загрузки данных')
+    } finally {
+      setInvoiceLoading(false)
+    }
+  }
+
+  const updateInvoiceItem = (idx, field, value) => {
+    setInvoiceItems(prev => prev.map((item, i) =>
+      i === idx ? { ...item, [field]: parseFloat(value) || 0 } : item
+    ))
+  }
+
+  const removeInvoiceItem = (idx) => {
+    setInvoiceItems(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const handleCreateInvoice = async () => {
+    const validItems = invoiceItems.filter(i => i.item_id && i.quantity > 0)
+    if (validItems.length === 0) { setInvoiceError('Нет позиций для создания заявки'); return }
+    setInvoiceSaving(true)
+    setInvoiceError('')
+    try {
+      await api.post('/warehouse/outgoing-invoices', {
+        invoice_type: 'order',
+        order_id:     orderId,
+        notes:        `Заявка из Сметы заказа #${order?.order_number || ''}`,
+        items: validItems.map(i => ({
+          item_id:    i.item_id,
+          quantity:   i.quantity,
+          sale_price: i.sale_price || 0,
+        })),
+      })
+      setInvoiceSuccess(true)
+    } catch (e) {
+      setInvoiceError(e.response?.data?.error || 'Ошибка создания заявки')
+    } finally {
+      setInvoiceSaving(false)
+    }
+  }
+
+  // Есть ли строки с продуктами краски или просто заполненные строки
+  const hasPaintData = isPainting && rows.some(r => r.detail_name.trim() && parseFloat(r.area_m2) > 0)
+
+  // Итог
+  const totalArea  = rows.reduce((s, r) => s + (parseFloat(r.area_m2) || 0), 0)
   const totalPrice = rows.reduce((s, r) => s + (parseFloat(r.total_price) || 0), 0)
-  const filledCount = rows.filter(r => r.detail_name.trim()).length
 
-  if (!loaded) return <div className="text-center py-3"><CSpinner size="sm" /></div>
-
-  const cellStyle = { border:'1px solid var(--cui-border-color)', padding:0 }
+  const cellStyle = { border: '1px solid var(--cui-border-color)', padding: 0 }
   const inputStyle = {
-    width:'100%', border:'none', background:'transparent',
-    fontSize:12, padding:'3px 5px', color:'var(--cui-body-color)', outline:'none',
+    border: 'none', outline: 'none', background: 'transparent',
+    width: '100%', padding: '4px 6px', fontSize: 13,
+    color: 'var(--cui-body-color)',
   }
-  const thStyle = {
-    border:'1px solid var(--cui-border-color)', padding:'4px 5px',
-    fontWeight:600, fontSize:11, textAlign:'center',
-    color:'var(--cui-body-color)', background:'var(--cui-secondary-bg)',
+
+  // Фильтрованный список продуктов для dropdown
+  const getFilteredProducts = (rowIdx) => {
+    const search = (productSearch[rowIdx] || '').toLowerCase()
+    if (!search) return products.slice(0, 30)
+    return products.filter(p =>
+      p.name.toLowerCase().includes(search) ||
+      (p.article || '').toLowerCase().includes(search)
+    ).slice(0, 20)
   }
 
   return (
     <div>
-      {error   && <CAlert color="danger"  dismissible onClose={() => setError('')}>{error}</CAlert>}
-      {success && <CAlert color="success" dismissible onClose={() => setSuccess(false)}>Сохранено!</CAlert>}
+      {error   && <CAlert color="danger"  className="py-2 mb-2">{error}</CAlert>}
+      {success && <CAlert color="success" className="py-2 mb-2">✅ Сохранено</CAlert>}
 
-      {/* Настройки — не нужны для ЧПУ/Покраска/Мягкая мебель */}
-
-      {/* Toolbar */}
-      <div className="d-flex justify-content-between align-items-center mb-2">
-        <div className="small text-body-secondary">
-          {filledCount > 0 && <>
-            Деталей: <strong>{filledCount}</strong> &nbsp;|&nbsp;
-            м²: <strong>{totalM2.toFixed(2)}</strong> &nbsp;|&nbsp;
-            Итого: <strong className="text-success">{totalPrice.toFixed(2)} сом.</strong>
-          </>}
-        </div>
-        <div className="d-flex gap-2">
-          <CButton size="sm" color="secondary" variant="outline"
-            onClick={() => printDetailEstimate(order, serviceType, settings, rows, totalM2, totalPrice, payments)}>
-            <CIcon icon={cilPrint} className="me-1" />Печать
-          </CButton>
-          {canEdit && (
-            <CButton size="sm" color="primary" onClick={save} disabled={saving}>
-              {saving
-                ? <><CSpinner size="sm" className="me-1" />Сохранение...</>
-                : <><CIcon icon={cilSave} className="me-1" />Сохранить</>
-              }
-            </CButton>
-          )}
-        </div>
-      </div>
+      {/* Блок расхода продукта — только для Покраски */}
+      {isPainting && (
+        <PaintConsumptionBlock rows={rows} />
+      )}
 
       {/* Таблица деталей */}
-      <div style={{ overflowX:'auto' }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, tableLayout:'fixed' }}>
-          <colgroup>
-            <col style={{ width:28 }} />
-            <col />
-            <col style={{ width:65 }} />
-            <col style={{ width:65 }} />
-            <col style={{ width:45 }} />
-            <col style={{ width:60 }} />
-            <col style={{ width:80 }} />
-            <col style={{ width:80 }} />
-            {canEdit && <col style={{ width:26 }} />}
-          </colgroup>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
-            <tr>
-              {['№','Наименование и размеры деталей','Ширина мм','Высота мм','Кол-во','м²','Цена/м²','Сумма', canEdit?'':null]
-                .filter(h => h !== null)
-                .map((h,i) => <th key={i} style={thStyle}>{h}</th>)}
+            <tr style={{ background: 'var(--cui-secondary-bg)' }}>
+              <th style={{ ...cellStyle, padding: '6px 4px', textAlign: 'center', width: 32, color: 'var(--cui-secondary-color)', fontSize: 11 }}>#</th>
+              <th style={{ ...cellStyle, padding: '6px 8px', minWidth: 180 }}>Наименование детали</th>
+              {isPainting && (
+                <th style={{ ...cellStyle, padding: '6px 8px', minWidth: 180 }}>Продукт</th>
+              )}
+              <th style={{ ...cellStyle, padding: '6px 8px', width: 90, textAlign: 'center' }}>Ширина мм</th>
+              <th style={{ ...cellStyle, padding: '6px 8px', width: 90, textAlign: 'center' }}>Высота мм</th>
+              <th style={{ ...cellStyle, padding: '6px 8px', width: 70, textAlign: 'center' }}>Кол-во</th>
+              <th style={{ ...cellStyle, padding: '6px 8px', width: 90, textAlign: 'center' }}>м²</th>
+              <th style={{ ...cellStyle, padding: '6px 8px', width: 100, textAlign: 'right' }}>Цена/м²</th>
+              <th style={{ ...cellStyle, padding: '6px 8px', width: 110, textAlign: 'right' }}>Сумма</th>
+              {canEdit && <th style={{ ...cellStyle, width: 30 }}></th>}
             </tr>
           </thead>
           <tbody>
             {rows.map((row, idx) => {
               const hasData = row.detail_name.trim() !== ''
-              const isDirty = hasData && row._dirty
+              const filteredProds = isPainting ? getFilteredProducts(idx) : []
+              const selectedProd  = isPainting && row.product_id
+                ? products.find(p => p.id === row.product_id)
+                : null
+              const prodCategory  = selectedProd?.category || ''
+              const catNorm       = normalizeCategory(prodCategory)
+              const catMeta       = catNorm ? CATEGORY_LABELS[catNorm] : null
+
               return (
-                <tr key={row._id} style={{ background: isDirty ? 'var(--cui-warning-bg-subtle)' : 'transparent' }}>
+                <tr key={row._id} style={{ background: hasData ? 'transparent' : 'transparent' }}>
                   {/* № */}
-                  <td style={{ border:'1px solid var(--cui-border-color)', textAlign:'center', fontSize:10, color:'var(--cui-secondary-color)', padding:'2px' }}>
-                    {hasData ? idx+1 : ''}
+                  <td style={{ ...cellStyle, textAlign: 'center', color: 'var(--cui-secondary-color)', fontSize: 11, padding: '4px 2px' }}>
+                    {hasData ? idx + 1 : ''}
                   </td>
+
                   {/* Наименование */}
                   <td style={cellStyle}>
                     {canEdit ? (
                       <input
+                        type="text"
                         value={row.detail_name}
-                        placeholder="Фаска 2д 1800×1200=2шт..."
+                        placeholder={idx === 0 ? 'Например: Фасад 600×900' : ''}
                         onChange={e => updateRow(idx, 'detail_name', e.target.value)}
-                        style={{ ...inputStyle, width:'100%' }}
+                        style={inputStyle}
                       />
-                    ) : <div style={{ padding:'3px 6px' }}>{row.detail_name}</div>}
+                    ) : <div style={{ padding: '4px 8px' }}>{row.detail_name}</div>}
                   </td>
+
+                  {/* Продукт (только Покраска) */}
+                  {isPainting && (
+                    <td style={{ ...cellStyle, position: 'relative' }}>
+                      {canEdit ? (
+                        <div style={{ position: 'relative' }}>
+                          {row.product_id ? (
+                            // Выбранный продукт
+                            <div style={{ display: 'flex', alignItems: 'center', padding: '3px 6px', gap: 4 }}>
+                              <div style={{ flex: 1, fontSize: 12 }}>
+                                <span style={{ fontWeight: 600 }}>{row.product_name}</span>
+                                {catMeta && (
+                                  <span style={{
+                                    marginLeft: 5, fontSize: 10, background: catMeta.color,
+                                    color: '#fff', borderRadius: 8, padding: '1px 6px',
+                                  }}>{catMeta.label}</span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => clearProduct(idx)}
+                                style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--cui-danger)', fontSize: 14, lineHeight: 1, padding: '0 2px' }}
+                                title="Очистить"
+                              >×</button>
+                            </div>
+                          ) : (
+                            // Поле поиска продукта
+                            <div>
+                              <input
+                                type="text"
+                                value={productSearch[idx] || ''}
+                                placeholder={productsLoading ? 'Загрузка...' : 'Выбрать продукт...'}
+                                onChange={e => {
+                                  setProductSearch(prev => ({ ...prev, [idx]: e.target.value }))
+                                  setProductDropdown(idx)
+                                }}
+                                onFocus={() => setProductDropdown(idx)}
+                                onBlur={() => setTimeout(() => setProductDropdown(null), 200)}
+                                style={inputStyle}
+                              />
+                              {productDropdown === idx && (
+                                <div style={{
+                                  position: 'absolute', top: '100%', left: 0, right: 0,
+                                  background: 'var(--cui-body-bg)',
+                                  border: '1px solid var(--cui-border-color)',
+                                  borderRadius: 4, zIndex: 1000,
+                                  maxHeight: 220, overflowY: 'auto',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                }}>
+                                  {filteredProds.length === 0 ? (
+                                    <div style={{ padding: '8px 12px', color: 'var(--cui-secondary-color)', fontSize: 12 }}>
+                                      Ничего не найдено
+                                    </div>
+                                  ) : filteredProds.map(prod => {
+                                    const pCatNorm = normalizeCategory(prod.category)
+                                    const pCatMeta = pCatNorm ? CATEGORY_LABELS[pCatNorm] : null
+                                    return (
+                                      <div
+                                        key={prod.id}
+                                        onMouseDown={() => selectProduct(idx, prod)}
+                                        style={{
+                                          padding: '6px 12px', cursor: 'pointer', fontSize: 12,
+                                          display: 'flex', alignItems: 'center', gap: 6,
+                                          borderBottom: '1px solid var(--cui-border-color)',
+                                        }}
+                                        onMouseEnter={e => e.currentTarget.style.background = 'var(--cui-secondary-bg)'}
+                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                      >
+                                        <span style={{ flex: 1 }}>{prod.name}</span>
+                                        {prod.article && (
+                                          <span style={{ color: 'var(--cui-secondary-color)', fontSize: 11 }}>{prod.article}</span>
+                                        )}
+                                        {pCatMeta && (
+                                          <span style={{
+                                            fontSize: 10, background: pCatMeta.color,
+                                            color: '#fff', borderRadius: 8, padding: '1px 6px',
+                                          }}>{pCatMeta.label}</span>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ padding: '4px 8px', fontSize: 12 }}>
+                          {row.product_name}
+                          {catMeta && (
+                            <span style={{
+                              marginLeft: 5, fontSize: 10, background: catMeta.color,
+                              color: '#fff', borderRadius: 8, padding: '1px 6px',
+                            }}>{catMeta.label}</span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  )}
+
                   {/* Ширина */}
                   <td style={cellStyle}>
                     {canEdit ? (
-                      <input type="number" min="0" step="0.1" value={row.width_mm} placeholder=""
+                      <input type="number" min="0" value={row.width_mm}
                         onChange={e => updateRow(idx, 'width_mm', e.target.value)}
-                        style={{ ...inputStyle, textAlign:'center' }} />
-                    ) : <div style={{ padding:'3px', textAlign:'center' }}>{row.width_mm}</div>}
+                        style={{ ...inputStyle, textAlign: 'center' }} />
+                    ) : <div style={{ padding: '4px', textAlign: 'center' }}>{row.width_mm}</div>}
                   </td>
+
                   {/* Высота */}
                   <td style={cellStyle}>
                     {canEdit ? (
-                      <input type="number" min="0" step="0.1" value={row.height_mm} placeholder=""
+                      <input type="number" min="0" value={row.height_mm}
                         onChange={e => updateRow(idx, 'height_mm', e.target.value)}
-                        style={{ ...inputStyle, textAlign:'center' }} />
-                    ) : <div style={{ padding:'3px', textAlign:'center' }}>{row.height_mm}</div>}
+                        style={{ ...inputStyle, textAlign: 'center' }} />
+                    ) : <div style={{ padding: '4px', textAlign: 'center' }}>{row.height_mm}</div>}
                   </td>
+
                   {/* Кол-во */}
                   <td style={cellStyle}>
                     {canEdit ? (
-                      <input type="number" min="1" step="1" value={row.quantity}
+                      <input type="number" min="1" value={row.quantity}
                         onChange={e => updateRow(idx, 'quantity', e.target.value)}
-                        style={{ ...inputStyle, textAlign:'center' }} />
-                    ) : <div style={{ padding:'3px', textAlign:'center' }}>{row.quantity}</div>}
+                        style={{ ...inputStyle, textAlign: 'center' }} />
+                    ) : <div style={{ padding: '4px', textAlign: 'center' }}>{row.quantity}</div>}
                   </td>
-                  {/* м² авто */}
+
+                  {/* м² (авто) */}
                   <td style={{
-                    border:'1px solid var(--cui-border-color)', padding:'3px 5px',
-                    textAlign:'center', fontSize:11,
-                    background: hasData && row.area_m2 ? 'var(--cui-info-bg-subtle)' : 'transparent',
-                    color: hasData && row.area_m2 ? 'var(--cui-info)' : 'var(--cui-secondary-color)',
+                    ...cellStyle, textAlign: 'center', padding: '4px 6px',
+                    background: row.area_m2 ? 'var(--cui-info-bg-subtle)' : 'transparent',
+                    color: row.area_m2 ? 'var(--cui-info)' : 'var(--cui-secondary-color)',
+                    fontWeight: row.area_m2 ? 600 : 400,
                   }}>
-                    {row.area_m2 > 0 ? Number(row.area_m2).toFixed(2) : ''}
+                    {row.area_m2 !== '' ? row.area_m2 : ''}
                   </td>
+
                   {/* Цена */}
                   <td style={cellStyle}>
                     {canEdit ? (
-                      <input type="number" min="0" step="any" value={row.unit_price} placeholder=""
+                      <input type="number" min="0" step="any" value={row.unit_price}
                         onChange={e => updateRow(idx, 'unit_price', e.target.value)}
-                        style={{ ...inputStyle, textAlign:'right' }} />
-                    ) : <div style={{ padding:'3px 5px', textAlign:'right' }}>{row.unit_price > 0 ? Number(row.unit_price).toLocaleString() : ''}</div>}
+                        style={{ ...inputStyle, textAlign: 'right' }} />
+                    ) : <div style={{ padding: '4px 8px', textAlign: 'right' }}>{row.unit_price}</div>}
                   </td>
+
                   {/* Сумма */}
                   <td style={{
-                    border:'1px solid var(--cui-border-color)', padding:'3px 5px', textAlign:'right',
-                    fontWeight: hasData && row.total_price ? 600 : 400,
-                    color: hasData && row.total_price ? 'var(--cui-success)' : 'var(--cui-secondary-color)',
-                    background: hasData && row.total_price ? 'var(--cui-success-bg-subtle)' : 'transparent',
+                    ...cellStyle, padding: '4px 8px', textAlign: 'right',
+                    fontWeight: row.total_price ? 600 : 400,
+                    color: row.total_price ? 'var(--cui-success)' : 'var(--cui-secondary-color)',
+                    background: row.total_price ? 'var(--cui-success-bg-subtle)' : 'transparent',
                   }}>
-                    {row.total_price > 0 ? Number(row.total_price).toFixed(2) : ''}
+                    {row.total_price !== '' && row.total_price !== 0
+                      ? Math.round(Number(row.total_price)).toLocaleString()
+                      : ''}
                   </td>
+
                   {/* Удалить */}
                   {canEdit && (
-                    <td style={{ border:'1px solid var(--cui-border-color)', padding:'2px', textAlign:'center' }}>
+                    <td style={{ ...cellStyle, textAlign: 'center', padding: '2px' }}>
                       {hasData && (
                         <button onClick={() => deleteRow(idx)}
-                          style={{ border:'none', background:'none', cursor:'pointer', color:'var(--cui-danger)', fontSize:14, padding:'0 2px' }}>×</button>
+                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--cui-danger)', fontSize: 16, padding: '0 2px', lineHeight: 1 }}>×</button>
                       )}
                     </td>
                   )}
                 </tr>
               )
             })}
+
             {/* Итог */}
-            <tr style={{ background:'var(--cui-secondary-bg)', fontWeight:700 }}>
-              <td colSpan={5} style={{ border:'1px solid var(--cui-border-color)', padding:'5px 8px', textAlign:'right' }}>Итого:</td>
-              <td style={{ border:'1px solid var(--cui-border-color)', padding:'5px', textAlign:'center', color:'var(--cui-info)' }}>
-                {totalM2 > 0 ? totalM2.toFixed(2) : ''}
+            <tr style={{ background: 'var(--cui-secondary-bg)', fontWeight: 700 }}>
+              <td colSpan={isPainting ? 7 : 6} style={{ ...cellStyle, padding: '6px 8px', textAlign: 'right' }}>
+                Итого:
               </td>
-              <td style={{ border:'1px solid var(--cui-border-color)' }} />
-              <td style={{ border:'1px solid var(--cui-border-color)', padding:'5px 8px', textAlign:'right', color:'var(--cui-success)', fontSize:13 }}>
-                {totalPrice > 0 ? totalPrice.toFixed(2) : ''}
+              <td style={{ ...cellStyle, padding: '6px 8px', textAlign: 'center', color: 'var(--cui-info)' }}>
+                {totalArea > 0 ? totalArea.toFixed(4) : ''}
               </td>
-              {canEdit && <td style={{ border:'1px solid var(--cui-border-color)' }} />}
+              <td style={{ ...cellStyle, padding: '6px 8px', textAlign: 'right' }}></td>
+              <td style={{ ...cellStyle, padding: '6px 8px', textAlign: 'right', color: 'var(--cui-success)' }}>
+                {totalPrice > 0 ? Math.round(totalPrice).toLocaleString() + ' сом' : ''}
+              </td>
+              {canEdit && <td style={cellStyle}></td>}
             </tr>
           </tbody>
         </table>
       </div>
 
-      {/* Добавить строки */}
+      {/* Кнопки */}
       {canEdit && (
-        <div className="d-flex gap-2 mt-2">
-          <CButton size="sm" color="secondary" variant="outline"
-            onClick={() => setRows(prev => [...prev, ...Array.from({length:10}, emptyRow)])}>
-            <CIcon icon={cilPlus} className="me-1" />+ 10 строк
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, gap: 8 }}>
+          <CButton color="secondary" variant="outline" size="sm"
+            onClick={() => setRows(prev => [...prev, ...Array.from({ length: 10 }, emptyRow)])}>
+            <CIcon icon={cilPlus} size="sm" className="me-1" />+ 10 строк
           </CButton>
-          <CButton size="sm" color="secondary" variant="outline"
-            onClick={() => setRows(prev => [...prev, ...Array.from({length:5}, emptyRow)])}>
-            + 5 строк
-          </CButton>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {hasPaintData && (
+              <CButton color="warning" variant="outline" size="sm" onClick={openInvoiceModal}>
+                <CIcon icon={cilClipboard} size="sm" className="me-1" />Создать заявку
+              </CButton>
+            )}
+            <CButton color="primary" size="sm" disabled={saving} onClick={save}>
+              {saving ? <CSpinner size="sm" className="me-1" /> : <CIcon icon={cilSave} size="sm" className="me-1" />}
+              Сохранить
+            </CButton>
+          </div>
         </div>
       )}
+
+      {/* ── Модал заявки со Склада ── */}
+      <CModal size="lg" visible={invoiceModal} onClose={() => setInvoiceModal(false)}>
+        <CModalHeader>
+          <CModalTitle>
+            <CIcon icon={cilClipboard} className="me-2" />Создать заявку со Склада
+          </CModalTitle>
+        </CModalHeader>
+        <CModalBody>
+          {invoiceError   && <CAlert color="danger"  className="mb-3">{invoiceError}</CAlert>}
+          {invoiceSuccess ? (
+            <CAlert color="success">
+              ✅ Заявка создана! Она появилась на странице{' '}
+              <a href="/warehouse/outgoing-invoices" target="_blank" rel="noopener noreferrer">
+                Расходных накладных
+              </a>{' '}
+              со статусом «Черновик».
+            </CAlert>
+          ) : invoiceLoading ? (
+            <div className="text-center py-4">
+              <CSpinner size="sm" className="me-2" />Загрузка данных из Сметы...
+            </div>
+          ) : invoiceItems.length > 0 ? (
+            <>
+              <p className="small text-body-secondary mb-3">
+                Перечень рассчитан из Сметы (Покраска). Проверьте количество и укажите цену продажи.
+              </p>
+              <CTable small bordered style={{ fontSize: 13 }}>
+                <CTableHead>
+                  <CTableRow>
+                    <CTableHeaderCell>Продукт</CTableHeaderCell>
+                    <CTableHeaderCell className="text-center" style={{ width: 60 }}>Ед.</CTableHeaderCell>
+                    <CTableHeaderCell style={{ width: 95 }}>Кол-во</CTableHeaderCell>
+                    <CTableHeaderCell style={{ width: 110 }}>Цена прод.</CTableHeaderCell>
+                    <CTableHeaderCell className="text-body-secondary" style={{ fontSize: 11, width: 150 }}>Расчёт</CTableHeaderCell>
+                    <CTableHeaderCell style={{ width: 36 }}></CTableHeaderCell>
+                  </CTableRow>
+                </CTableHead>
+                <CTableBody>
+                  {invoiceItems.map((item, idx) => {
+                    const catMeta = CATEGORY_LABELS[item.category]
+                    return (
+                      <CTableRow key={idx} style={{ background: item.no_item ? 'var(--cui-warning-bg-subtle)' : 'transparent' }}>
+                        <CTableDataCell>
+                          <div className="fw-semibold" style={{ fontSize: 13 }}>{item.item_name}</div>
+                          <div>
+                            {catMeta && (
+                              <span style={{
+                                fontSize: 10, background: catMeta.color, color: '#fff',
+                                borderRadius: 8, padding: '1px 6px', fontWeight: 600,
+                              }}>{item.category}</span>
+                            )}
+                            {item.no_item && (
+                              <span className="text-warning ms-1" style={{ fontSize: 11 }}>⚠️ нет в номенклатуре</span>
+                            )}
+                          </div>
+                        </CTableDataCell>
+                        <CTableDataCell className="text-center">{item.unit}</CTableDataCell>
+                        <CTableDataCell>
+                          <input type="number" min="0.001" step="any" value={item.quantity}
+                            onChange={e => updateInvoiceItem(idx, 'quantity', e.target.value)}
+                            style={{ width: '100%', border: '1px solid var(--cui-border-color)', borderRadius: 4, padding: '3px 6px', textAlign: 'right', background: 'transparent', color: 'var(--cui-body-color)' }} />
+                        </CTableDataCell>
+                        <CTableDataCell>
+                          <input type="number" min="0" step="any" value={item.sale_price || ''}
+                            placeholder="0"
+                            onChange={e => updateInvoiceItem(idx, 'sale_price', e.target.value)}
+                            style={{ width: '100%', border: '1px solid var(--cui-border-color)', borderRadius: 4, padding: '3px 6px', textAlign: 'right', background: 'transparent', color: 'var(--cui-body-color)' }} />
+                        </CTableDataCell>
+                        <CTableDataCell className="text-body-secondary" style={{ fontSize: 11 }}>
+                          {item.area_info}
+                        </CTableDataCell>
+                        <CTableDataCell className="text-center">
+                          <button onClick={() => removeInvoiceItem(idx)}
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--cui-danger)', fontSize: 16 }}>×</button>
+                        </CTableDataCell>
+                      </CTableRow>
+                    )
+                  })}
+                </CTableBody>
+              </CTable>
+              {invoiceItems.some(i => i.no_item) && (
+                <CAlert color="warning" className="mt-2 py-2 small">
+                  ⚠️ Некоторые продукты не найдены в номенклатуре. Добавьте их через <strong>Склад → Номенклатура</strong>.
+                </CAlert>
+              )}
+            </>
+          ) : !invoiceError ? (
+            <CAlert color="warning">
+              В Смете нет заполненных строк с размерами. Сначала заполните таблицу и сохраните.
+            </CAlert>
+          ) : null}
+        </CModalBody>
+        <CModalFooter>
+          <CButton color="secondary" variant="outline" onClick={() => setInvoiceModal(false)}>
+            {invoiceSuccess ? 'Закрыть' : 'Отмена'}
+          </CButton>
+          {!invoiceSuccess && invoiceItems.length > 0 && (
+            <CButton color="primary" disabled={invoiceSaving} onClick={handleCreateInvoice}>
+              {invoiceSaving
+                ? <><CSpinner size="sm" className="me-1" />Создание...</>
+                : <><CIcon icon={cilClipboard} className="me-1" />Создать заявку</>}
+            </CButton>
+          )}
+        </CModalFooter>
+      </CModal>
     </div>
   )
 }
 
 // ── Главный компонент ─────────────────────────────────────
 
-export default function DetailEstimateTable({ orderId, order, payments, canEdit = true, canEditPrice = false }) {
-  // Дефолтный тип зависит от типа заказа
-  const defaultType = order?.order_type === 'cutting'  ? 'cutting' :
-                      order?.order_type === 'painting' ? 'painting' :
-                      order?.order_type === 'cnc'      ? 'cnc' :
-                      order?.order_type === 'soft_fabric' || order?.order_type === 'soft_furniture' ? 'soft' :
-                      'cnc'
+export default function DetailEstimateTable({ orderId, order, payments, canEdit = true }) {
+  const defaultType = order?.order_type === 'cutting'
+    ? 'cutting'
+    : order?.order_type === 'painting'
+    ? 'painting'
+    : order?.order_type === 'cnc'
+    ? 'cnc'
+    : (order?.order_type === 'soft_fabric' || order?.order_type === 'soft_furniture')
+    ? 'soft'
+    : 'cnc'
 
-  // Для Заказа цеха (workshop) показываем все 4 раздела сразу
   const isWorkshop = order?.order_type === 'workshop'
   const defaultSections = isWorkshop
     ? ['cutting', 'cnc', 'painting', 'soft']
     : [defaultType]
 
-  const [activeType,     setActiveType]     = useState(defaultType)
-  const [addModal,       setAddModal]       = useState(false)
-  const [activeSections, setActiveSections] = useState(defaultSections)
+  const [activeType,      setActiveType]      = useState(defaultType)
+  const [activeSections,  setActiveSections]  = useState(defaultSections)
+  const [addModal,        setAddModal]        = useState(false)
+  const [newSectionType,  setNewSectionType]  = useState('')
 
   useEffect(() => {
     api.get(`/orders/${orderId}/detail-estimate`)
@@ -497,87 +903,106 @@ export default function DetailEstimateTable({ orderId, order, payments, canEdit 
         const sections = r.data.data || []
         if (sections.length > 0) {
           const types = sections.map(s => s.service_type)
-          setActiveSections(types)
-          setActiveType(types[0])
+          // Для workshop добавляем к дефолтным если их нет
+          if (isWorkshop) {
+            const merged = [...new Set([...defaultSections, ...types])]
+            setActiveSections(merged)
+            setActiveType(merged[0])
+          } else {
+            setActiveSections(types)
+            setActiveType(types[0])
+          }
         }
       })
       .catch(() => {})
   }, [orderId])
 
-  const addSection = (type) => {
-    if (!activeSections.includes(type)) {
-      setActiveSections(prev => [...prev, type])
-    }
-    setActiveType(type)
+  const addSection = () => {
+    if (!newSectionType || activeSections.includes(newSectionType)) return
+    setActiveSections(prev => [...prev, newSectionType])
+    setActiveType(newSectionType)
     setAddModal(false)
+    setNewSectionType('')
   }
 
-  const removeSection = (type) => {
-    if (!window.confirm(`Удалить раздел "${SERVICE_TYPES.find(s=>s.key===type)?.label}"?`)) return
-    api.delete(`/orders/${orderId}/detail-estimate/${type}`)
-    setActiveSections(prev => prev.filter(t => t !== type))
-    if (activeType === type) {
-      setActiveType(activeSections.filter(t => t !== type)[0] || 'cnc')
-    }
+  const removeSection = async (type) => {
+    if (!window.confirm('Удалить раздел и все его данные?')) return
+    await api.delete(`/orders/${orderId}/detail-estimate/${type}`).catch(() => {})
+    const next = activeSections.filter(t => t !== type)
+    setActiveSections(next)
+    setActiveType(next[0] || '')
   }
+
+  const availableToAdd = SERVICE_TYPES.filter(s => !activeSections.includes(s.key))
+
+  const tabBtnStyle = (key) => ({
+    padding: '6px 14px',
+    border: 'none',
+    borderBottom: activeType === key ? '2px solid' : '2px solid transparent',
+    borderBottomColor: activeType === key
+      ? SERVICE_TYPES.find(s => s.key === key)?.color || 'var(--cui-primary)'
+      : 'transparent',
+    background: 'transparent',
+    cursor: 'pointer',
+    fontWeight: activeType === key ? 600 : 400,
+    fontSize: 13,
+    color: activeType === key
+      ? SERVICE_TYPES.find(s => s.key === key)?.color || 'var(--cui-primary)'
+      : 'var(--cui-secondary-color)',
+    transition: 'all 0.15s',
+  })
 
   return (
     <div>
-      {/* Табы типов услуг */}
-      <div className="d-flex align-items-center gap-2 mb-3 flex-wrap">
-        <CNav variant="pills">
-          {activeSections.map(type => {
-            const def = SERVICE_TYPES.find(s => s.key === type)
-            return (
-              <CNavItem key={type}>
-                <CNavLink
-                  active={activeType === type}
-                  onClick={() => setActiveType(type)}
-                  style={{ cursor:'pointer', padding:'4px 12px', fontSize:13 }}>
-                  <CBadge color={def?.color} className="me-1" style={{ fontSize:10 }}>
-                    {def?.label}
-                  </CBadge>
-                  {canEdit && activeSections.length > 1 && (
-                    <span
-                      onClick={e => { e.stopPropagation(); removeSection(type) }}
-                      style={{ marginLeft:4, color:'var(--cui-danger)', cursor:'pointer', fontSize:14 }}>
-                      ×
-                    </span>
-                  )}
-                </CNavLink>
-              </CNavItem>
-            )
-          })}
-        </CNav>
-
-        {/* Добавить раздел */}
-        {canEdit && (
-          <CButton size="sm" color="secondary" variant="outline"
-            onClick={() => setAddModal(true)}>
-            <CIcon icon={cilPlus} className="me-1" />Раздел
-          </CButton>
+      {/* Табы */}
+      <div style={{
+        display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2,
+        borderBottom: '1px solid var(--cui-border-color)', marginBottom: 14,
+      }}>
+        {activeSections.map(key => {
+          const svc = SERVICE_TYPES.find(s => s.key === key)
+          return (
+            <div key={key} style={{ display: 'flex', alignItems: 'center' }}>
+              <button style={tabBtnStyle(key)} onClick={() => setActiveType(key)}>
+                {svc?.label || key}
+              </button>
+              {canEdit && activeSections.length > 1 && (
+                <button
+                  onClick={() => removeSection(key)}
+                  title="Удалить раздел"
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--cui-secondary-color)', fontSize: 14, padding: '0 2px', lineHeight: 1 }}>×</button>
+              )}
+            </div>
+          )
+        })}
+        {canEdit && availableToAdd.length > 0 && (
+          <button
+            onClick={() => setAddModal(true)}
+            style={{
+              padding: '6px 12px', border: '1px dashed var(--cui-border-color)',
+              borderRadius: 4, background: 'transparent', cursor: 'pointer',
+              color: 'var(--cui-secondary-color)', fontSize: 12, marginLeft: 4,
+            }}>
+            <CIcon icon={cilPlus} size="sm" className="me-1" />Раздел
+          </button>
         )}
       </div>
 
-      {/* Активная секция */}
+      {/* Активный раздел */}
       {activeSections.includes(activeType) && (
         activeType === 'cutting' ? (
-          // Распил — EstimateTable с каталогом услуг (лист/м/шт)
           <EstimateTable
             key="cutting"
             orderId={orderId}
             order={order}
             canEdit={canEdit}
-            canEditPrice={canEditPrice}
           />
         ) : (
-          // ЧПУ / Покраска / Мягкая мебель — таблица деталей с размерами и м²
           <ServiceSection
             key={activeType}
             serviceType={activeType}
             orderId={orderId}
             order={order}
-            payments={payments}
             canEdit={canEdit}
           />
         )
@@ -585,27 +1010,32 @@ export default function DetailEstimateTable({ orderId, order, payments, canEdit 
 
       {/* Модал добавления раздела */}
       <CModal visible={addModal} onClose={() => setAddModal(false)}>
-        <CModalHeader><CModalTitle>Добавить раздел сметы</CModalTitle></CModalHeader>
+        <CModalHeader>
+          <CModalTitle>Добавить раздел</CModalTitle>
+        </CModalHeader>
         <CModalBody>
-          <div className="d-flex flex-column gap-2">
-            {SERVICE_TYPES.filter(s => !activeSections.includes(s.key)).map(s => (
-              <CButton key={s.key} color={s.color} variant="outline"
-                onClick={() => addSection(s.key)}>
-                {s.label}
-                <span className="ms-2 small text-body-secondary">{s.subtitle}</span>
-              </CButton>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {availableToAdd.map(svc => (
+              <button
+                key={svc.key}
+                onClick={() => setNewSectionType(svc.key)}
+                style={{
+                  padding: '10px 16px', border: `2px solid ${newSectionType === svc.key ? svc.color : 'var(--cui-border-color)'}`,
+                  borderRadius: 6, background: newSectionType === svc.key ? svc.color + '18' : 'transparent',
+                  cursor: 'pointer', textAlign: 'left', fontWeight: 500,
+                  color: 'var(--cui-body-color)',
+                }}>
+                {svc.label}
+                <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--cui-secondary-color)' }}>
+                  {svc.subtitle}
+                </span>
+              </button>
             ))}
-            {SERVICE_TYPES.every(s => activeSections.includes(s.key)) && (
-              <div className="text-center text-body-secondary py-2 small">
-                Все разделы уже добавлены
-              </div>
-            )}
           </div>
         </CModalBody>
         <CModalFooter>
-          <CButton color="secondary" variant="outline" onClick={() => setAddModal(false)}>
-            Закрыть
-          </CButton>
+          <CButton color="secondary" onClick={() => setAddModal(false)}>Отмена</CButton>
+          <CButton color="primary" disabled={!newSectionType} onClick={addSection}>Добавить</CButton>
         </CModalFooter>
       </CModal>
     </div>

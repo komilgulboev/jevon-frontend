@@ -9,11 +9,12 @@ export function AuthProvider({ children }) {
     return raw ? JSON.parse(raw) : null
   })
 
-  const login = useCallback(async (email, password) => {
-    const { data } = await api.post('/auth/login', { email, password })
-    localStorage.setItem('access_token', data.access_token)
+  // login принимает phone (или email) + password
+  const login = useCallback(async (phone, password) => {
+    const { data } = await api.post('/auth/login', { phone, password })
+    localStorage.setItem('access_token',  data.access_token)
     localStorage.setItem('refresh_token', data.refresh_token)
-    localStorage.setItem('user', JSON.stringify(data.user))
+    localStorage.setItem('user',          JSON.stringify(data.user))
     setUser(data.user)
     return data.user
   }, [])
