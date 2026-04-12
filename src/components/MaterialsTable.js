@@ -209,12 +209,12 @@ export default function MaterialsTable({ orderId, order, stageName, canEdit = tr
   }
 
 const addFromWarehouse = (item) => {
-  setMatRows(prev => {
+  setRows(prev => {
     const emptyIdx = prev.findIndex(r => !r.name.trim())
     const price = item.sale_price > 0 ? item.sale_price : ''
     const qty   = 1
     const newRow = {
-      ...emptyMaterialRow(),
+      ...emptyRow(),
       name:        item.name,
       unit:        item.unit || 'шт',
       unit_price:  price,

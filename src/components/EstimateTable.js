@@ -339,30 +339,30 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
     } catch {} finally { setWarehouseLoading(false) }
   }
 
-const addFromWarehouse = (item) => {
-  setMatRows(prev => {
-    const emptyIdx = prev.findIndex(r => !r.name.trim())
-    const price = item.sale_price > 0 ? item.sale_price : ''
-    const qty   = 1
-    const newRow = {
-      ...emptyMaterialRow(),
-      name:        item.name,
-      unit:        item.unit || 'шт',
-      unit_price:  price,
-      quantity:    qty,
-      total_price: price ? qty * price : '',
-      item_id:     item.id,
-      _dirty:      true,
-    }
-    if (emptyIdx !== -1) {
-      const next = [...prev]
-      next[emptyIdx] = newRow
-      return next
-    }
-    return [...prev, newRow]
-  })
-  setWarehouseModal(false)
-}
+  const addFromWarehouse = (item) => {
+    setMatRows(prev => {
+      const emptyIdx = prev.findIndex(r => !r.name.trim())
+      const price = item.sale_price > 0 ? item.sale_price : ''
+      const qty   = 1
+      const newRow = {
+        ...emptyMaterialRow(),
+        name:        item.name,
+        unit:        item.unit || 'шт',
+        unit_price:  price,
+        quantity:    qty,
+        total_price: price ? qty * price : '',
+        item_id:     item.id,
+        _dirty:      true,
+      }
+      if (emptyIdx !== -1) {
+        const next = [...prev]
+        next[emptyIdx] = newRow
+        return next
+      }
+      return [...prev, newRow]
+    })
+    setWarehouseModal(false)
+  }
 
   const filteredWarehouse = warehouseItems.filter(i => {
     const q = warehouseSearch.toLowerCase()
@@ -461,7 +461,16 @@ const addFromWarehouse = (item) => {
     })
     if (totalM2 > 0) {
       const next = [...rows]
-      next[designIdx] = { ...designRow, quantity: parseFloat(totalM2.toFixed(2)), unit: 'м²', unit_price: 15, total_price: parseFloat((totalM2 * 15).toFixed(2)), _dirty: true }
+      // Используем текущую цену если задана, иначе дефолт 15
+      const price = parseFloat(designRow.unit_price) || 15
+      next[designIdx] = {
+        ...designRow,
+        quantity:    parseFloat(totalM2.toFixed(2)),
+        unit:        'м²',
+        unit_price:  price,
+        total_price: parseFloat((totalM2 * price).toFixed(2)),
+        _dirty:      true,
+      }
       return next
     }
     return rows
@@ -479,6 +488,9 @@ const addFromWarehouse = (item) => {
         )
       }
       next[idx] = row
+      // Для design-строки не запускаем recalcDesign при изменении unit_price
+      // чтобы не перезаписать только что введённую цену
+      if (row._group === 'design' && field === 'unit_price') return next
       return recalcDesign(next)
     })
   }
@@ -657,11 +669,22 @@ const addFromWarehouse = (item) => {
                       {row._group === 'design' ? 'м²' : (row.unit + (row.unit_spec?' '+row.unit_spec:''))}
                     </div>}
                   </td>
-                 <td style={{ ...cellStyle, background: row.item_id ? 'var(--cui-secondary-bg)' : 'transparent' }}>
-  <div style={{ padding:'4px 8px', textAlign:'right', fontSize:13, color: row.unit_price !== '' ? 'var(--cui-body-color)' : 'var(--cui-secondary-color)' }}>
-    {row.unit_price !== '' ? Number(row.unit_price).toLocaleString() : ''}
-  </div>
-</td>
+                  {/* ── Цена: для design — редактируемый input, для остальных — div ── */}
+                  <td style={{ ...cellStyle, background: row.item_id ? 'var(--cui-secondary-bg)' : 'transparent' }}>
+                    {canEdit && row._group === 'design' ? (
+                      <input
+                        type="number" min="0" step="any"
+                        value={row.unit_price}
+                        placeholder=""
+                        onChange={e => updateSvc(idx, 'unit_price', e.target.value)}
+                        style={{ ...inputStyle, textAlign:'right' }}
+                      />
+                    ) : (
+                      <div style={{ padding:'4px 8px', textAlign:'right', fontSize:13, color: row.unit_price !== '' ? 'var(--cui-body-color)' : 'var(--cui-secondary-color)' }}>
+                        {row.unit_price !== '' ? Number(row.unit_price).toLocaleString() : ''}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ border:'1px solid var(--cui-border-color)', padding:'4px 8px', textAlign:'right', fontWeight: hasData && row.total_price ? 600 : 400, color: hasData && row.total_price ? 'var(--cui-success)' : 'var(--cui-secondary-color)', background: hasData && row.total_price ? 'var(--cui-success-bg-subtle)' : 'transparent' }}>
                     {row.total_price !== '' && row.total_price !== 0 ? Math.round(Number(row.total_price)).toLocaleString() : ''}
                   </td>

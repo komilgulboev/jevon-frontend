@@ -24,6 +24,7 @@ import MaterialsTable from '../../components/MaterialsTable'
 import DetailEstimateTable from '../../components/DetailEstimateTable'
 import ExpensesTable from '../../components/ExpensesTable'
 import { getOrderStageAssignees, syncOrderStageAssignees } from '../../api/expenses'
+import { formatOrderNumber } from '../../utils/orderNumber'
 
 const ORDER_TYPE_COLOR = {
   workshop:'primary', cutting:'warning', painting:'danger',
@@ -278,9 +279,9 @@ export default function OrderDetail() {
         </CButton>
         <div className="flex-grow-1">
           <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
-            <CBadge color="secondary" style={{ fontSize:14, fontWeight:700 }}>
-              #{order.order_number}
-            </CBadge>
+<CBadge color="secondary" style={{ fontSize:14, fontWeight:700 }}>
+  {formatOrderNumber(order.order_type, order.order_number)}
+</CBadge>
             <CBadge color={ORDER_TYPE_COLOR[order.order_type] || 'secondary'}>
               {ORDER_TYPE_LABELS[order.order_type] || order.order_type}
             </CBadge>
