@@ -7,9 +7,11 @@ import {
   CTableHeaderCell, CTableDataCell,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilPlus, cilSave, cilTrash, cilClipboard } from '@coreui/icons'
+import { cilPlus, cilSave, cilTrash, cilClipboard, cilPrint } from '@coreui/icons'
 import api from '../api/client'
 import EstimateTable from './EstimateTable'
+
+
 
 // ── Константы ─────────────────────────────────────────────
 
@@ -53,13 +55,9 @@ async function buildInvoiceItemsFromRows(rows) {
     if (norm !== 'Краска') continue
     if (!paintGrouped[row.product_id]) {
       paintGrouped[row.product_id] = {
-        item_id:    row.product_id,
-        item_name:  row.product_name || wItem?.name || '—',
-        category:   'Краска',
-        unit:       wItem?.unit || 'кг',
-        total_area: 0,
-        sale_price: wItem?.sale_price || 0,
-        no_item:    !wItem,
+        item_id: row.product_id, item_name: row.product_name || wItem?.name || '—',
+        category: 'Краска', unit: wItem?.unit || 'кг', total_area: 0,
+        sale_price: wItem?.sale_price || 0, no_item: !wItem,
       }
     }
     paintGrouped[row.product_id].total_area += area
@@ -113,7 +111,7 @@ function calcRow(row) {
   return { area_m2: area || '', total_price: total || '' }
 }
 
-// ── Блок расхода ──────────────────────────────────────────
+// ── Блок расхода краски ───────────────────────────────────
 
 function PaintConsumptionBlock({ rows }) {
   const totalArea = rows.reduce((s, r) => s + (parseFloat(r.area_m2) || 0), 0)
@@ -166,8 +164,104 @@ function PaintConsumptionBlock({ rows }) {
 }
 
 // ── Секция услуги ─────────────────────────────────────────
+function printServiceEstimate(order, serviceType, rows, totalArea, totalPrice) {
+  const svcLabel = SERVICE_TYPES.find(s => s.key === serviceType)?.label || serviceType
+  const filledRows = rows.filter(r => r.detail_name.trim())
 
-function ServiceSection({ serviceType, orderId, order, canEdit }) {
+  const tableRows = filledRows.map((r, i) => `
+    <tr>
+      <td class="num">${i + 1}</td>
+      <td class="name">${r.detail_name}</td>
+      <td class="center">${r.height_mm || ''}</td>
+      <td class="center">${r.width_mm || ''}</td>
+      <td class="center">${r.quantity || ''}</td>
+      <td class="center">${r.area_m2 ? parseFloat(r.area_m2).toFixed(4) : ''}</td>
+      <td class="right">${r.unit_price ? Number(r.unit_price).toLocaleString() : ''}</td>
+      <td class="right bold">${r.total_price ? Math.round(Number(r.total_price)).toLocaleString() : ''}</td>
+    </tr>`).join('')
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Смета ${svcLabel} №${order?.order_number || ''}</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:Arial,sans-serif; font-size:10pt; color:#000; background:#fff; }
+.page { width:210mm; margin:0 auto; padding:8mm; }
+.header { text-align:center; border:2px solid #000; padding:4mm; margin-bottom:4mm; }
+.header h1 { font-size:14pt; font-weight:bold; }
+.header p  { font-size:9pt; }
+.info-grid { display:grid; grid-template-columns:1fr 1fr; gap:2mm; margin-bottom:4mm; font-size:9pt; }
+.info-grid .cell { border:1px solid #000; padding:1.5mm 3mm; }
+.info-grid .label { font-weight:bold; }
+h2 { font-size:10pt; font-weight:bold; text-align:center; border:1px solid #000;
+     border-bottom:none; padding:2mm; background:#f0f0f0;
+     -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+table { width:100%; border-collapse:collapse; margin-bottom:4mm; }
+th,td { border:1px solid #000 !important; padding:1.5mm 2mm; font-size:9pt; }
+th { background:#e0e0e0 !important; text-align:center; font-weight:bold;
+     -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+td.num    { text-align:center; width:8mm; }
+td.name   { text-align:left; }
+td.center { text-align:center; }
+td.right  { text-align:right; }
+td.bold   { font-weight:bold; }
+tr:nth-child(even) { background:#fafafa !important;
+  -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+.total-row td { font-weight:bold; background:#e8e8e8 !important;
+  border-top:2px solid #000 !important;
+  -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+.sign { margin-top:8mm; display:flex; justify-content:space-between; font-size:9pt; }
+.print-btn { display:block; width:210mm; margin:10px auto;
+  padding:10px; background:#1a73e8; color:white;
+  border:none; border-radius:6px; font-size:14px; cursor:pointer; }
+@media screen {
+  body { background:#888; padding:10px 0 30px; }
+  .page { background:#fff; box-shadow:0 3px 20px rgba(0,0,0,0.4); min-height:297mm; }
+}
+@media print {
+  @page { size:A4 portrait; margin:0; }
+  body { background:#fff; padding:0; }
+  .page { padding:8mm; box-shadow:none; min-height:auto; }
+  .print-btn { display:none; }
+}
+</style></head><body>
+<button class="print-btn" onclick="window.print()">🖨️ Распечатать смету</button>
+<div class="page">
+  <div class="header"><h1>JEVON</h1><p>${svcLabel} — смета</p></div>
+  <div class="info-grid">
+    <div class="cell"><span class="label">Номер заказа:</span> ${order?.order_number || '—'}</div>
+    <div class="cell"><span class="label">Дата:</span> ${new Date().toLocaleDateString('ru-RU')}</div>
+    <div class="cell"><span class="label">Клиент:</span> ${order?.client_name || '—'} ${order?.client_phone || ''}</div>
+    <div class="cell"><span class="label">Заказ:</span> ${order?.title || ''}</div>
+  </div>
+  <h2>Смета — ${svcLabel}</h2>
+  <table><thead><tr>
+    <th>№</th><th>Наименование</th><th>Высота мм</th><th>Ширина мм</th>
+    <th>Кол-во</th><th>м²</th><th>Цена/м²</th><th>Сумма (сом.)</th>
+  </tr></thead><tbody>
+    ${tableRows}
+    <tr class="total-row">
+      <td colspan="5" style="text-align:right">Итого:</td>
+      <td style="text-align:center">${totalArea > 0 ? totalArea.toFixed(4) : ''}</td>
+      <td></td>
+      <td style="text-align:right">${totalPrice > 0 ? Math.round(totalPrice).toLocaleString() : ''}</td>
+    </tr>
+  </tbody></table>
+  <div class="sign">
+    <span>Исполнитель: _______________________</span>
+    <span>Клиент: _______________________</span>
+  </div>
+</div></body></html>`
+
+  const w = window.open('', '_blank')
+  w.document.write(html)
+  w.document.close()
+  w.focus()
+}
+
+function ServiceSection({ serviceType, orderId, order, canEdit, onSaved }) {
+
+  
   const isPainting = serviceType === 'painting'
 
   const [rows,     setRows]     = useState(() => Array.from({ length: DEFAULT_ROWS }, emptyRow))
@@ -194,33 +288,53 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
     api.get('/warehouse/items')
       .then(r => {
         const d = r.data
-        setProducts(Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.items) ? d.items : [])
+        setProducts(Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : [])
       })
       .catch(() => setProducts([]))
       .finally(() => setProductsLoading(false))
   }, [isPainting])
 
-  const load = useCallback(async () => {
-    try {
-      const r = await api.get(`/orders/${orderId}/detail-estimate`)
-      const sections = r.data.data || []
-      const sec = sections.find(s => s.service_type === serviceType)
-      if (sec) {
-        if (sec.settings) setSettings({ section_subtitle: sec.settings.section_subtitle || '', deadline: sec.settings.deadline || '', delivery_date: sec.settings.delivery_date || '', notes: sec.settings.notes || '' })
-        if (sec.rows?.length > 0) {
-          const filled = sec.rows.map(r => ({
-            _id: r.id || Math.random().toString(36).slice(2),
-            detail_name: r.detail_name || '', width_mm: r.width_mm || '', height_mm: r.height_mm || '',
-            quantity: r.quantity || 1, area_m2: r.area_m2 || '', unit_price: r.unit_price || '',
-            total_price: r.total_price || '', product_id: r.product_id || '',
-            product_name: r.product_name || '', product_category: r.product_category || '', _dirty: false,
-          }))
-          const empty = Math.max(0, DEFAULT_ROWS - filled.length)
-          setRows([...filled, ...Array.from({ length: empty }, emptyRow)])
-        }
+const load = useCallback(async () => {
+  try {
+    const r = await api.get(`/orders/${orderId}/detail-estimate`)
+    const sections = r.data.data || []
+    const sec = sections.find(s => s.service_type === serviceType)
+    if (sec) {
+      if (sec.settings) setSettings({
+        section_subtitle: sec.settings.section_subtitle || '',
+        deadline:         sec.settings.deadline         || '',
+        delivery_date:    sec.settings.delivery_date    || '',
+        notes:            sec.settings.notes            || '',
+      })
+      if (sec.rows?.length > 0) {
+        const filled = sec.rows.map(r => {
+          // Восстанавливаем product_category из списка products
+          let cat = r.product_category || ''
+          if (!cat && r.product_id && products.length > 0) {
+            const found = products.find(p => p.id === r.product_id)
+            if (found) cat = found.category || ''
+          }
+          return {
+            _id:              r.id || Math.random().toString(36).slice(2),
+            detail_name:      r.detail_name   || '',
+            width_mm:         r.width_mm      || '',
+            height_mm:        r.height_mm     || '',
+            quantity:         r.quantity      || 1,
+            area_m2:          r.area_m2       || '',
+            unit_price:       r.unit_price    || '',
+            total_price:      r.total_price   || '',
+            product_id:       r.product_id    || '',
+            product_name:     r.product_name  || '',
+            product_category: cat,
+            _dirty: false,
+          }
+        })
+        const empty = Math.max(0, DEFAULT_ROWS - filled.length)
+        setRows([...filled, ...Array.from({ length: empty }, emptyRow)])
       }
-    } catch {}
-  }, [orderId, serviceType])
+    }
+  } catch {}
+}, [orderId, serviceType, products])  // ← добавлен products
 
   useEffect(() => { load() }, [load])
 
@@ -243,40 +357,67 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
     })
   }
 
-  const deleteRow = (idx) => setRows(prev => { const next = [...prev]; next.splice(idx, 1, emptyRow()); return next })
+  const deleteRow = (idx) => setRows(prev => {
+    const next = [...prev]; next.splice(idx, 1, emptyRow()); return next
+  })
 
   const selectProduct = (rowIdx, prod) => {
-    setRows(prev => { const next = [...prev]; next[rowIdx] = { ...next[rowIdx], product_id: prod.id, product_name: prod.name, product_category: prod.category || '', _dirty: true }; return next })
-    setProductDropdown(null); setProductSearch(prev => ({ ...prev, [rowIdx]: '' }))
+    setRows(prev => {
+      const next = [...prev]
+      next[rowIdx] = { ...next[rowIdx], product_id: prod.id, product_name: prod.name, product_category: prod.category || '', _dirty: true }
+      return next
+    })
+    setProductDropdown(null)
+    setProductSearch(prev => ({ ...prev, [rowIdx]: '' }))
   }
 
   const clearProduct = (rowIdx) => {
-    setRows(prev => { const next = [...prev]; next[rowIdx] = { ...next[rowIdx], product_id: '', product_name: '', product_category: '', _dirty: true }; return next })
+    setRows(prev => {
+      const next = [...prev]
+      next[rowIdx] = { ...next[rowIdx], product_id: '', product_name: '', product_category: '', _dirty: true }
+      return next
+    })
   }
 
-  const save = async () => {
-    setSaving(true); setError('')
-    try {
-      const rowsToSave = rows.filter(r => r.detail_name.trim()).map(r => ({
-        detail_name: r.detail_name.trim(), width_mm: parseFloat(r.width_mm) || 0,
-        height_mm: parseFloat(r.height_mm) || 0, quantity: parseInt(r.quantity) || 1,
-        unit_price: parseFloat(r.unit_price) || 0, product_id: r.product_id || '', product_name: r.product_name || '',
-      }))
-      await api.post(`/orders/${orderId}/detail-estimate`, { service_type: serviceType, settings, rows: rowsToSave })
-      setSuccess(true); setTimeout(() => setSuccess(false), 2000); load()
-    } catch (e) { setError(e.response?.data?.error || 'Ошибка сохранения') }
-    finally { setSaving(false) }
-  }
+const save = async () => {
+  setSaving(true); setError('')
+  try {
+    const rowsToSave = rows.filter(r => r.detail_name.trim()).map(r => ({
+      detail_name:  r.detail_name.trim(),
+      width_mm:     parseFloat(r.width_mm)  || 0,
+      height_mm:    parseFloat(r.height_mm) || 0,
+      quantity:     parseInt(r.quantity)    || 1,
+      unit_price:   parseFloat(r.unit_price) || 0,
+      product_id:   r.product_id   || '',
+      product_name: r.product_name || '',
+    }))
+    await api.post(`/orders/${orderId}/detail-estimate`, {
+      service_type: serviceType, settings, rows: rowsToSave,
+    })
+    setSuccess(true)
+    setTimeout(() => setSuccess(false), 2000)
+    // load() убран — не нужен, rows уже в правильном состоянии
+    onSaved?.()
+  } catch (e) {
+    setError(e.response?.data?.error || 'Ошибка сохранения')
+  } finally { setSaving(false) }
+}
 
   const openInvoiceModal = async () => {
-    setInvoiceError(''); setInvoiceSuccess(false); setInvoiceItems([]); setInvoiceModal(true); setInvoiceLoading(true)
+    setInvoiceError(''); setInvoiceSuccess(false); setInvoiceItems([])
+    setInvoiceModal(true); setInvoiceLoading(true)
     try { setInvoiceItems(await buildInvoiceItemsFromRows(rows)) }
     catch { setInvoiceError('Ошибка загрузки данных') }
     finally { setInvoiceLoading(false) }
   }
 
-  const updateInvoiceItem = (idx, field, value) => setInvoiceItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: parseFloat(value) || 0 } : item))
-  const removeInvoiceItem = (idx) => setInvoiceItems(prev => prev.filter((_, i) => i !== idx))
+  const updateInvoiceItem = (idx, field, value) =>
+    setInvoiceItems(prev => prev.map((item, i) =>
+      i === idx ? { ...item, [field]: parseFloat(value) || 0 } : item
+    ))
+
+  const removeInvoiceItem = (idx) =>
+    setInvoiceItems(prev => prev.filter((_, i) => i !== idx))
 
   const handleCreateInvoice = async () => {
     const validItems = invoiceItems.filter(i => i.item_id && i.quantity > 0)
@@ -289,12 +430,13 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
         items: validItems.map(i => ({ item_id: i.item_id, quantity: i.quantity, sale_price: i.sale_price || 0 })),
       })
       setInvoiceSuccess(true)
-    } catch (e) { setInvoiceError(e.response?.data?.error || 'Ошибка создания заявки') }
-    finally { setInvoiceSaving(false) }
+    } catch (e) {
+      setInvoiceError(e.response?.data?.error || 'Ошибка создания заявки')
+    } finally { setInvoiceSaving(false) }
   }
 
   const hasPaintData = isPainting && rows.some(r => r.detail_name.trim() && parseFloat(r.area_m2) > 0)
-  const totalArea    = rows.reduce((s, r) => s + (parseFloat(r.area_m2) || 0), 0)
+  const totalArea    = rows.reduce((s, r) => s + (parseFloat(r.area_m2)    || 0), 0)
   const totalPrice   = rows.reduce((s, r) => s + (parseFloat(r.total_price) || 0), 0)
 
   const cellStyle  = { border: '1px solid var(--cui-border-color)', padding: 0 }
@@ -303,7 +445,10 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
   const getFilteredProducts = (rowIdx) => {
     const search = (productSearch[rowIdx] || '').toLowerCase()
     if (!search) return products.slice(0, 30)
-    return products.filter(p => p.name.toLowerCase().includes(search) || (p.article || '').toLowerCase().includes(search)).slice(0, 20)
+    return products.filter(p =>
+      p.name.toLowerCase().includes(search) ||
+      (p.article || '').toLowerCase().includes(search)
+    ).slice(0, 20)
   }
 
   return (
@@ -313,26 +458,34 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
 
       {isPainting && <PaintConsumptionBlock rows={rows} />}
 
-      {/* Toolbar — наверху */}
-      {canEdit && (
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8, gap:8 }}>
-          <CButton color="secondary" variant="outline" size="sm"
-            onClick={() => setRows(prev => [...prev, ...Array.from({ length: 10 }, emptyRow)])}>
-            <CIcon icon={cilPlus} size="sm" className="me-1" />+ 10 строк
-          </CButton>
-          <div style={{ display:'flex', gap:8 }}>
-            {hasPaintData && (
-              <CButton color="warning" variant="outline" size="sm" onClick={openInvoiceModal}>
-                <CIcon icon={cilClipboard} size="sm" className="me-1" />Создать заявку
-              </CButton>
-            )}
-            <CButton color="primary" size="sm" disabled={saving} onClick={save}>
-              {saving ? <CSpinner size="sm" className="me-1" /> : <CIcon icon={cilSave} size="sm" className="me-1" />}
-              Сохранить
-            </CButton>
-          </div>
-        </div>
+      {/* Toolbar */}
+     {/* Toolbar */}
+{canEdit && (
+  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8, gap:8 }}>
+    <CButton color="secondary" variant="outline" size="sm"
+      onClick={() => setRows(prev => [...prev, ...Array.from({ length: 10 }, emptyRow)])}>
+      <CIcon icon={cilPlus} size="sm" className="me-1" />+ 10 строк
+    </CButton>
+    <div style={{ display:'flex', gap:8 }}>
+      {/* ── Кнопка печати ── */}
+      <CButton color="secondary" variant="outline" size="sm"
+        onClick={() => printServiceEstimate(order, serviceType, rows, totalArea, totalPrice)}>
+        <CIcon icon={cilPrint} size="sm" className="me-1" />Печать
+      </CButton>
+      {hasPaintData && (
+        <CButton color="warning" variant="outline" size="sm" onClick={openInvoiceModal}>
+          <CIcon icon={cilClipboard} size="sm" className="me-1" />Создать заявку
+        </CButton>
       )}
+      <CButton color="primary" size="sm" disabled={saving} onClick={save}>
+        {saving
+          ? <CSpinner size="sm" className="me-1" />
+          : <CIcon icon={cilSave} size="sm" className="me-1" />}
+        Сохранить
+      </CButton>
+    </div>
+  </div>
+)}
 
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
@@ -352,7 +505,7 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
           </thead>
           <tbody>
             {rows.map((row, idx) => {
-              const hasData      = row.detail_name.trim() !== ''
+              const hasData       = row.detail_name.trim() !== ''
               const filteredProds = isPainting ? getFilteredProducts(idx) : []
               const selectedProd  = isPainting && row.product_id ? products.find(p => p.id === row.product_id) : null
               const catNorm       = normalizeCategory(selectedProd?.category || '')
@@ -360,11 +513,15 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
 
               return (
                 <tr key={row._id}>
-                  <td style={{ ...cellStyle, textAlign:'center', color:'var(--cui-secondary-color)', fontSize:11, padding:'4px 2px' }}>{hasData ? idx + 1 : ''}</td>
+                  <td style={{ ...cellStyle, textAlign:'center', color:'var(--cui-secondary-color)', fontSize:11, padding:'4px 2px' }}>
+                    {hasData ? idx + 1 : ''}
+                  </td>
                   <td style={cellStyle}>
                     {canEdit ? (
-                      <input type="text" value={row.detail_name} placeholder={idx === 0 ? 'Например: Фасад 600×900' : ''}
-                        onChange={e => updateRow(idx, 'detail_name', e.target.value)} style={inputStyle} />
+                      <input type="text" value={row.detail_name}
+                        placeholder={idx === 0 ? 'Например: Фасад 600×900' : ''}
+                        onChange={e => updateRow(idx, 'detail_name', e.target.value)}
+                        style={inputStyle} />
                     ) : <div style={{ padding:'4px 8px' }}>{row.detail_name}</div>}
                   </td>
 
@@ -378,13 +535,17 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
                                 <span style={{ fontWeight:600 }}>{row.product_name}</span>
                                 {catMeta && <span style={{ marginLeft:5, fontSize:10, background:catMeta.color, color:'#fff', borderRadius:8, padding:'1px 6px' }}>{catMeta.label}</span>}
                               </div>
-                              <button onClick={() => clearProduct(idx)} style={{ border:'none', background:'none', cursor:'pointer', color:'var(--cui-danger)', fontSize:14, lineHeight:1, padding:'0 2px' }}>×</button>
+                              <button onClick={() => clearProduct(idx)}
+                                style={{ border:'none', background:'none', cursor:'pointer', color:'var(--cui-danger)', fontSize:14, lineHeight:1, padding:'0 2px' }}>×</button>
                             </div>
                           ) : (
                             <div>
                               <input type="text" value={productSearch[idx] || ''}
                                 placeholder={productsLoading ? 'Загрузка...' : 'Выбрать продукт...'}
-                                onChange={e => { setProductSearch(prev => ({ ...prev, [idx]: e.target.value })); setProductDropdown(idx) }}
+                                onChange={e => {
+                                  setProductSearch(prev => ({ ...prev, [idx]: e.target.value }))
+                                  setProductDropdown(idx)
+                                }}
                                 onFocus={() => setProductDropdown(idx)}
                                 onBlur={() => setTimeout(() => setProductDropdown(null), 200)}
                                 style={inputStyle} />
@@ -420,22 +581,26 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
                   )}
 
                   <td style={cellStyle}>
-                    {canEdit ? <input type="number" min="0" value={row.height_mm} onChange={e => updateRow(idx, 'height_mm', e.target.value)} style={{ ...inputStyle, textAlign:'center' }} />
+                    {canEdit
+                      ? <input type="number" min="0" value={row.height_mm} onChange={e => updateRow(idx, 'height_mm', e.target.value)} style={{ ...inputStyle, textAlign:'center' }} />
                       : <div style={{ padding:'4px', textAlign:'center' }}>{row.height_mm}</div>}
                   </td>
                   <td style={cellStyle}>
-                    {canEdit ? <input type="number" min="0" value={row.width_mm} onChange={e => updateRow(idx, 'width_mm', e.target.value)} style={{ ...inputStyle, textAlign:'center' }} />
+                    {canEdit
+                      ? <input type="number" min="0" value={row.width_mm} onChange={e => updateRow(idx, 'width_mm', e.target.value)} style={{ ...inputStyle, textAlign:'center' }} />
                       : <div style={{ padding:'4px', textAlign:'center' }}>{row.width_mm}</div>}
                   </td>
                   <td style={cellStyle}>
-                    {canEdit ? <input type="number" min="1" value={row.quantity} onChange={e => updateRow(idx, 'quantity', e.target.value)} style={{ ...inputStyle, textAlign:'center' }} />
+                    {canEdit
+                      ? <input type="number" min="1" value={row.quantity} onChange={e => updateRow(idx, 'quantity', e.target.value)} style={{ ...inputStyle, textAlign:'center' }} />
                       : <div style={{ padding:'4px', textAlign:'center' }}>{row.quantity}</div>}
                   </td>
                   <td style={{ ...cellStyle, textAlign:'center', padding:'4px 6px', background: row.area_m2 ? 'var(--cui-info-bg-subtle)' : 'transparent', color: row.area_m2 ? 'var(--cui-info)' : 'var(--cui-secondary-color)', fontWeight: row.area_m2 ? 600 : 400 }}>
                     {row.area_m2 !== '' ? row.area_m2 : ''}
                   </td>
                   <td style={cellStyle}>
-                    {canEdit ? <input type="number" min="0" step="any" value={row.unit_price} onChange={e => updateRow(idx, 'unit_price', e.target.value)} style={{ ...inputStyle, textAlign:'right' }} />
+                    {canEdit
+                      ? <input type="number" min="0" step="any" value={row.unit_price} onChange={e => updateRow(idx, 'unit_price', e.target.value)} style={{ ...inputStyle, textAlign:'right' }} />
                       : <div style={{ padding:'4px 8px', textAlign:'right' }}>{row.unit_price}</div>}
                   </td>
                   <td style={{ ...cellStyle, padding:'4px 8px', textAlign:'right', fontWeight: row.total_price ? 600 : 400, color: row.total_price ? 'var(--cui-success)' : 'var(--cui-secondary-color)', background: row.total_price ? 'var(--cui-success-bg-subtle)' : 'transparent' }}>
@@ -443,7 +608,10 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
                   </td>
                   {canEdit && (
                     <td style={{ ...cellStyle, textAlign:'center', padding:'2px' }}>
-                      {hasData && <button onClick={() => deleteRow(idx)} style={{ border:'none', background:'none', cursor:'pointer', color:'var(--cui-danger)', fontSize:16, padding:'0 2px', lineHeight:1 }}>×</button>}
+                      {hasData && (
+                        <button onClick={() => deleteRow(idx)}
+                          style={{ border:'none', background:'none', cursor:'pointer', color:'var(--cui-danger)', fontSize:16, padding:'0 2px', lineHeight:1 }}>×</button>
+                      )}
                     </td>
                   )}
                 </tr>
@@ -451,9 +619,13 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
             })}
             <tr style={{ background:'var(--cui-secondary-bg)', fontWeight:700 }}>
               <td colSpan={isPainting ? 7 : 6} style={{ ...cellStyle, padding:'6px 8px', textAlign:'right' }}>Итого:</td>
-              <td style={{ ...cellStyle, padding:'6px 8px', textAlign:'center', color:'var(--cui-info)' }}>{totalArea > 0 ? totalArea.toFixed(4) : ''}</td>
+              <td style={{ ...cellStyle, padding:'6px 8px', textAlign:'center', color:'var(--cui-info)' }}>
+                {totalArea > 0 ? totalArea.toFixed(4) : ''}
+              </td>
               <td style={{ ...cellStyle, padding:'6px 8px', textAlign:'right' }}></td>
-              <td style={{ ...cellStyle, padding:'6px 8px', textAlign:'right', color:'var(--cui-success)' }}>{totalPrice > 0 ? Math.round(totalPrice).toLocaleString() + ' сом' : ''}</td>
+              <td style={{ ...cellStyle, padding:'6px 8px', textAlign:'right', color:'var(--cui-success)' }}>
+                {totalPrice > 0 ? Math.round(totalPrice).toLocaleString() + ' сом' : ''}
+              </td>
               {canEdit && <td style={cellStyle}></td>}
             </tr>
           </tbody>
@@ -462,17 +634,24 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
 
       {/* Модал заявки */}
       <CModal size="lg" visible={invoiceModal} onClose={() => setInvoiceModal(false)}>
-        <CModalHeader><CModalTitle><CIcon icon={cilClipboard} className="me-2" />Создать заявку со Склада</CModalTitle></CModalHeader>
+        <CModalHeader>
+          <CModalTitle><CIcon icon={cilClipboard} className="me-2" />Создать заявку со Склада</CModalTitle>
+        </CModalHeader>
         <CModalBody>
           {invoiceError && <CAlert color="danger" className="mb-3">{invoiceError}</CAlert>}
           {invoiceSuccess ? (
-            <CAlert color="success">✅ Заявка создана! Она появилась на странице{' '}
-              <a href="/warehouse/outgoing-invoices" target="_blank" rel="noopener noreferrer">Расходных накладных</a>{' '}со статусом «Черновик».</CAlert>
+            <CAlert color="success">
+              ✅ Заявка создана! Она появилась на странице{' '}
+              <a href="/warehouse/outgoing-invoices" target="_blank" rel="noopener noreferrer">Расходных накладных</a>{' '}
+              со статусом «Черновик».
+            </CAlert>
           ) : invoiceLoading ? (
             <div className="text-center py-4"><CSpinner size="sm" className="me-2" />Загрузка данных из Сметы...</div>
           ) : invoiceItems.length > 0 ? (
             <>
-              <p className="small text-body-secondary mb-3">Перечень рассчитан из Сметы (Покраска). Проверьте количество и укажите цену продажи.</p>
+              <p className="small text-body-secondary mb-3">
+                Перечень рассчитан из Сметы (Покраска). Проверьте количество и укажите цену продажи.
+              </p>
               <CTable small bordered style={{ fontSize:13 }}>
                 <CTableHead>
                   <CTableRow>
@@ -509,7 +688,8 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
                         </CTableDataCell>
                         <CTableDataCell className="text-body-secondary" style={{ fontSize:11 }}>{item.area_info}</CTableDataCell>
                         <CTableDataCell className="text-center">
-                          <button onClick={() => removeInvoiceItem(idx)} style={{ border:'none', background:'none', cursor:'pointer', color:'var(--cui-danger)', fontSize:16 }}>×</button>
+                          <button onClick={() => removeInvoiceItem(idx)}
+                            style={{ border:'none', background:'none', cursor:'pointer', color:'var(--cui-danger)', fontSize:16 }}>×</button>
                         </CTableDataCell>
                       </CTableRow>
                     )
@@ -518,7 +698,7 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
               </CTable>
               {invoiceItems.some(i => i.no_item) && (
                 <CAlert color="warning" className="mt-2 py-2 small">
-                  ⚠️ Некоторые продукты не найдены в номенклатуре. Добавьте их через <strong>Склад → Номенклатура</strong>.
+                  ⚠️ Некоторые продукты не найдены в номенклатуре. Добавьте через <strong>Склад → Номенклатура</strong>.
                 </CAlert>
               )}
             </>
@@ -527,10 +707,14 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
           ) : null}
         </CModalBody>
         <CModalFooter>
-          <CButton color="secondary" variant="outline" onClick={() => setInvoiceModal(false)}>{invoiceSuccess ? 'Закрыть' : 'Отмена'}</CButton>
+          <CButton color="secondary" variant="outline" onClick={() => setInvoiceModal(false)}>
+            {invoiceSuccess ? 'Закрыть' : 'Отмена'}
+          </CButton>
           {!invoiceSuccess && invoiceItems.length > 0 && (
             <CButton color="primary" disabled={invoiceSaving} onClick={handleCreateInvoice}>
-              {invoiceSaving ? <><CSpinner size="sm" className="me-1" />Создание...</> : <><CIcon icon={cilClipboard} className="me-1" />Создать заявку</>}
+              {invoiceSaving
+                ? <><CSpinner size="sm" className="me-1" />Создание...</>
+                : <><CIcon icon={cilClipboard} className="me-1" />Создать заявку</>}
             </CButton>
           )}
         </CModalFooter>
@@ -539,16 +723,74 @@ function ServiceSection({ serviceType, orderId, order, canEdit }) {
   )
 }
 
+// ── Блок прихода для дочернего заказа ────────────────────
+
+function IncomeBanner({ orderId, order }) {
+  const [sections,   setSections]   = useState([])
+  const [linkAmount, setLinkAmount] = useState(0)
+  const [loading,    setLoading]    = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const r = await api.get(`/orders/${orderId}/detail-estimate`)
+        setSections(r.data.data || [])
+      } catch {}
+      try {
+        if (order?.parent_order_id) {
+          const linksRes = await api.get(`/orders/${order.parent_order_id}/service-links`)
+          const links = linksRes.data.data || []
+          const myLink = links.find(l => l.child_order_id === orderId)
+          if (myLink) setLinkAmount(myLink.amount || 0)
+        }
+      } catch {}
+      setLoading(false)
+    }
+    load()
+  }, [orderId, order])
+
+  if (loading) return null
+  const ownEstimateTotal = sections.reduce((s, sec) => s + (sec.total_price || 0), 0)
+
+  return (
+    <div className="mb-3 p-3 rounded"
+      style={{ background:'var(--cui-success-bg-subtle)', border:'1px solid var(--cui-success-border-subtle)' }}>
+      <div className="fw-semibold text-success mb-2">💰 Доход от заказа цеха</div>
+      <div className="d-flex gap-4 flex-wrap">
+        <div>
+          <div className="small text-body-secondary">Заказано из цеха</div>
+          <div className="fw-bold text-success fs-6">+{linkAmount.toLocaleString()} сом.</div>
+        </div>
+        {ownEstimateTotal > 0 && (
+          <div>
+            <div className="small text-body-secondary">По своей смете</div>
+            <div className="fw-bold text-success fs-6">+{Math.round(ownEstimateTotal).toLocaleString()} сом.</div>
+          </div>
+        )}
+        {ownEstimateTotal > 0 && linkAmount > 0 && (
+          <div>
+            <div className="small text-body-secondary">Разница</div>
+            <div className={`fw-bold fs-6 ${ownEstimateTotal - linkAmount >= 0 ? 'text-success' : 'text-danger'}`}>
+              {ownEstimateTotal - linkAmount >= 0 ? '+' : ''}
+              {Math.round(ownEstimateTotal - linkAmount).toLocaleString()} сом.
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Главный компонент ─────────────────────────────────────
 
-export default function DetailEstimateTable({ orderId, order, payments, canEdit = true }) {
+export default function DetailEstimateTable({ orderId, order, payments, canEdit = true, onSaved }) {
   const defaultType = order?.order_type === 'cutting'  ? 'cutting'
     : order?.order_type === 'painting' ? 'painting'
     : order?.order_type === 'cnc'      ? 'cnc'
     : (order?.order_type === 'soft_fabric' || order?.order_type === 'soft_furniture') ? 'soft'
     : 'cnc'
 
-  const isWorkshop = order?.order_type === 'workshop'
+  const isChildOrder = !!order?.parent_order_id
 
   const [activeType,     setActiveType]     = useState('')
   const [activeSections, setActiveSections] = useState([])
@@ -564,31 +806,16 @@ export default function DetailEstimateTable({ orderId, order, payments, canEdit 
           const types = detailSections.map(s => s.service_type)
           setActiveSections(types)
           setActiveType(types[0])
-          setSectionsLoaded(true)
         } else {
-          // Проверяем старый формат estimate
-          api.get(`/orders/${orderId}/estimate`).then(er => {
-            const hasData = (er.data.services || []).length > 0 || (er.data.materials || []).length > 0
-            if (hasData) {
-              setActiveSections(['cutting'])
-              setActiveType('cutting')
-            } else if (!isWorkshop) {
-              setActiveSections([defaultType])
-              setActiveType(defaultType)
-            }
-          }).catch(() => {
-            if (!isWorkshop) {
-              setActiveSections([defaultType])
-              setActiveType(defaultType)
-            }
-          }).finally(() => setSectionsLoaded(true))
-        }
-      })
-      .catch(() => {
-        if (!isWorkshop) {
+          // Для всех типов заказов — показываем секцию по умолчанию
           setActiveSections([defaultType])
           setActiveType(defaultType)
         }
+        setSectionsLoaded(true)
+      })
+      .catch(() => {
+        setActiveSections([defaultType])
+        setActiveType(defaultType)
         setSectionsLoaded(true)
       })
   }, [orderId])
@@ -596,9 +823,7 @@ export default function DetailEstimateTable({ orderId, order, payments, canEdit 
   const addSection = async () => {
     if (!newSectionType || activeSections.includes(newSectionType)) return
     await api.post(`/orders/${orderId}/detail-estimate`, {
-      service_type: newSectionType,
-      settings: {},
-      rows: [],
+      service_type: newSectionType, settings: {}, rows: [],
     }).catch(() => {})
     setActiveSections(prev => [...prev, newSectionType])
     setActiveType(newSectionType)
@@ -619,22 +844,30 @@ export default function DetailEstimateTable({ orderId, order, payments, canEdit 
   const tabBtnStyle = (key) => ({
     padding: '6px 14px', border: 'none',
     borderBottom: activeType === key ? '2px solid' : '2px solid transparent',
-    borderBottomColor: activeType === key ? SERVICE_TYPES.find(s => s.key === key)?.color || 'var(--cui-primary)' : 'transparent',
+    borderBottomColor: activeType === key
+      ? SERVICE_TYPES.find(s => s.key === key)?.color || 'var(--cui-primary)'
+      : 'transparent',
     background: 'transparent', cursor: 'pointer',
     fontWeight: activeType === key ? 600 : 400, fontSize: 13,
-    color: activeType === key ? SERVICE_TYPES.find(s => s.key === key)?.color || 'var(--cui-primary)' : 'var(--cui-secondary-color)',
+    color: activeType === key
+      ? SERVICE_TYPES.find(s => s.key === key)?.color || 'var(--cui-primary)'
+      : 'var(--cui-secondary-color)',
     transition: 'all 0.15s',
   })
 
   return (
     <div>
+      {isChildOrder && <IncomeBanner orderId={orderId} order={order} />}
+
       {/* Табы */}
       <div style={{ display:'flex', alignItems:'center', flexWrap:'wrap', gap:2, borderBottom:'1px solid var(--cui-border-color)', marginBottom:14 }}>
         {activeSections.map(key => {
           const svc = SERVICE_TYPES.find(s => s.key === key)
           return (
             <div key={key} style={{ display:'flex', alignItems:'center' }}>
-              <button style={tabBtnStyle(key)} onClick={() => setActiveType(key)}>{svc?.label || key}</button>
+              <button style={tabBtnStyle(key)} onClick={() => setActiveType(key)}>
+                {svc?.label || key}
+              </button>
               {canEdit && activeSections.length > 1 && (
                 <button onClick={() => removeSection(key)} title="Удалить раздел"
                   style={{ border:'none', background:'none', cursor:'pointer', color:'var(--cui-secondary-color)', fontSize:14, padding:'0 2px', lineHeight:1 }}>×</button>
@@ -650,7 +883,6 @@ export default function DetailEstimateTable({ orderId, order, payments, canEdit 
         )}
       </div>
 
-      {/* Подсказка если нет секций */}
       {sectionsLoaded && activeSections.length === 0 && (
         <div className="text-center py-5 text-body-secondary">
           <div style={{ fontSize:40, marginBottom:8 }}>📋</div>
@@ -659,14 +891,11 @@ export default function DetailEstimateTable({ orderId, order, payments, canEdit 
         </div>
       )}
 
-      {/* Активный раздел */}
-      {activeSections.includes(activeType) && (
-        activeType === 'cutting' ? (
-          <EstimateTable key="cutting" orderId={orderId} order={order} canEdit={canEdit} />
-        ) : (
-          <ServiceSection key={activeType} serviceType={activeType} orderId={orderId} order={order} canEdit={canEdit} />
-        )
-      )}
+{activeSections.includes(activeType) && (
+  activeType === 'cutting' && (order?.order_type === 'workshop' || order?.order_type === 'external')
+    ? <EstimateTable key="estimate-cutting" orderId={orderId} order={order} canEdit={canEdit} onSaved={onSaved} />
+    : <ServiceSection key={`service-${activeType}`} serviceType={activeType} orderId={orderId} order={order} canEdit={canEdit} onSaved={onSaved} />
+)}
 
       {/* Модал добавления раздела */}
       <CModal visible={addModal} onClose={() => setAddModal(false)}>
@@ -675,7 +904,13 @@ export default function DetailEstimateTable({ orderId, order, payments, canEdit 
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {availableToAdd.map(svc => (
               <button key={svc.key} onClick={() => setNewSectionType(svc.key)}
-                style={{ padding:'10px 16px', border:`2px solid ${newSectionType === svc.key ? svc.color : 'var(--cui-border-color)'}`, borderRadius:6, background: newSectionType === svc.key ? svc.color + '18' : 'transparent', cursor:'pointer', textAlign:'left', fontWeight:500, color:'var(--cui-body-color)' }}>
+                style={{
+                  padding:'10px 16px',
+                  border:`2px solid ${newSectionType === svc.key ? svc.color : 'var(--cui-border-color)'}`,
+                  borderRadius:6,
+                  background: newSectionType === svc.key ? svc.color + '18' : 'transparent',
+                  cursor:'pointer', textAlign:'left', fontWeight:500, color:'var(--cui-body-color)',
+                }}>
                 {svc.label}
                 <span style={{ marginLeft:8, fontSize:12, color:'var(--cui-secondary-color)' }}>{svc.subtitle}</span>
               </button>

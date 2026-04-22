@@ -16,12 +16,14 @@ import {
 } from '../../api/expenses'
 import api from '../../api/client'
 import { useAuth } from '../../AuthContext'
+import { useTranslation } from 'react-i18next'
 
 const today        = new Date()
 const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10)
 const todayStr     = today.toISOString().slice(0, 10)
 
 export default function Timesheet() {
+  const { t } = useTranslation()
   const { hasRole } = useAuth()
   const canEdit = hasRole('admin', 'supervisor')
 
@@ -250,7 +252,9 @@ export default function Timesheet() {
                       <CTableRow key={s.user_id}>
                         <CTableDataCell>
                           <div className="fw-semibold">{s.full_name}</div>
-                          <CBadge color="secondary" style={{ fontSize: 9 }}>{s.role_name}</CBadge>
+                          <CBadge color="success" style={{ fontSize: 9 }}>
+                            {t(`employees.role_${s.role_name}`, { defaultValue: s.role_name })}
+                          </CBadge>
                         </CTableDataCell>
                         <CTableDataCell className="text-center">{s.work_days || '—'}</CTableDataCell>
                         <CTableDataCell className="text-center">

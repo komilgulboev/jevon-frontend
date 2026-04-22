@@ -32,11 +32,7 @@ const TelegramIcon = ({ size = 18 }) => (
 const waUrl = (p) => `https://wa.me/${p.replace(/[\s\-()+ ]/g, '')}`
 const tgUrl = (t) => t.startsWith('@') ? `https://t.me/${t.slice(1)}` : `https://t.me/${t}`
 
-const ROLE_COLOR = {
-  admin: 'danger', supervisor: 'primary', master: 'success',
-  manager: 'info', designer: 'warning', cutter: 'secondary',
-  warehouse: 'dark', driver: 'light', assembler: 'success', assistant: 'secondary',
-}
+const ROLE_COLOR = {}
 
 const CONTRACT_COLOR = { employment: 'success', gph: 'info', ip: 'warning', none: 'secondary' }
 
@@ -146,8 +142,13 @@ export default function Employees() {
       }
       setModal(false); load()
     } catch (err) {
-      setError(err.response?.data?.error || t('common.save'))
-    } finally {
+  const status = err.response?.status
+  if (status === 409) {
+    setError('Сотрудник с таким номером телефона уже существует')
+  } else {
+    setError(err.response?.data?.error || t('common.save'))
+  }
+} finally {
       setSaving(false)
     }
   }
@@ -241,7 +242,7 @@ export default function Employees() {
                       </div>
                     </CTableDataCell>
                     <CTableDataCell>
-                      <CBadge color={ROLE_COLOR[emp.role_name] || 'secondary'}>
+                      <CBadge color="success">
                         {t(`employees.role_${emp.role_name}`, { defaultValue: emp.role_name })}
                       </CBadge>
                     </CTableDataCell>

@@ -63,18 +63,18 @@ const translatedNav = filteredNav.map((item) => {
     >
       <CSidebarHeader className="border-bottom">
 <CSidebarBrand to="/">
-  <img
-    src={jevonLogo}
-    alt="Jevon"
-    className="sidebar-brand-full"
-    style={{ height: 64, width: '100%', objectFit: 'cover', objectPosition: 'center' }}
-  />
-  <img
-    src={jevonLogo}
-    alt="J"
-    className="sidebar-brand-narrow"
-    style={{ height: 44, width: 44, borderRadius: '50%', objectFit: 'cover' }}
-  />
+<img
+  src={jevonLogo}
+  alt="Jevon"
+  className="sidebar-brand-full"
+  style={{ height: 40, width: 'auto', maxWidth: '100%', objectFit: 'contain' }}
+/>
+<img
+  src={jevonLogo}
+  alt="J"
+  className="sidebar-brand-narrow"
+  style={{ height: 32, width: 32, borderRadius: '50%', objectFit: 'cover' }}
+/>
 </CSidebarBrand>
         <CCloseButton
           className="d-lg-none"

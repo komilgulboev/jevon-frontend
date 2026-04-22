@@ -33,10 +33,7 @@ useEffect(() => {
     setColorMode(theme)
     return
   }
-  if (isColorModeSet()) {
-    return
-  }
-  setColorMode(storedTheme || 'light')
+  setColorMode('light') // всегда светлая, игнорируем localStorage
 }, [])
   return (
     <HashRouter>

@@ -72,14 +72,17 @@ const _nav = [
     _i18n: true,
     roles: ['admin', 'supervisor', 'manager'],
   },
-  {
-    component: CNavItem,
-    name: 'nav.reports',
-    to: '/reports',
-    icon: <CIcon icon={cilChartLine} customClassName="nav-icon" />,
-    _i18n: true,
-    roles: ['admin', 'supervisor'],
-  },
+{
+  component: CNavGroup,
+  name: 'nav.reports',
+  icon: <CIcon icon={cilChartLine} customClassName="nav-icon" />,
+  _i18n: true,
+  roles: ['admin', 'supervisor'],
+  items: [
+    { component: CNavItem, name: 'Общий отчёт',  to: '/reports'        },
+    { component: CNavItem, name: 'Доходность',   to: '/reports/profit' },
+  ],
+},
 
   // ── Склад ─────────────────────────────────────────────────
   {

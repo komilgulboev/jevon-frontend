@@ -15,6 +15,7 @@ const Suppliers      = lazy(() => import('./views/warehouse/Suppliers'))
 const Receipts       = lazy(() => import('./views/warehouse/Receipts'))
 const Clients        = lazy(() => import('./views/clients/Clients'))
 const OutgoingInvoices = lazy(() => import('./views/warehouse/OutgoingInvoices'))
+const ProfitReport = lazy(() => import('./views/reports/ProfitReport'))
 
 const routes = [
   { path: '/',                    exact: true, name: 'Главная'             },
@@ -33,6 +34,7 @@ const routes = [
   { path: '/warehouse/receipts',  name: 'Приходные накладные', element: Receipts       },
   { path: '/clients',             name: 'Клиенты',             element: Clients        },
   { path: '/warehouse/outgoing-invoices', name: 'Расходные накладные', element: OutgoingInvoices },
+  { path: '/reports/profit', name: 'Доходность', element: ProfitReport },
 ]
 
 export default routes

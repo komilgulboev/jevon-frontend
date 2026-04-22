@@ -11,11 +11,12 @@ import api from '../api/client'
 
 export const FILE_CATEGORIES = [
   { key: 'preliminary',  label: 'Предварительные фото', icon: '📷' },
+  { key: 'measure',      label: 'Замер',                icon: '📏' },
   { key: 'design',       label: 'Дизайн',               icon: '🎨' },
   { key: 'drawing',      label: 'Чертёж',               icon: '📐' },
-  { key: 'finished',     label: 'Готовые работы',        icon: '✅' },
   { key: 'installation', label: 'Установка',             icon: '🔧' },
-  { key: 'handover',     label: 'Сдача',                 icon: '🤝' },
+  { key: 'handover',     label: 'Акт сдачи',            icon: '🤝' },
+  { key: 'finished',     label: 'Готовые работы',        icon: '✅' },
   { key: 'other',        label: 'Другое',                icon: '📎' },
 ]
 
