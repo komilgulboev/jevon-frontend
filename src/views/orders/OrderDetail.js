@@ -299,10 +299,10 @@ export default function OrderDetail() {
   const canManage         = hasRole('admin', 'supervisor', 'manager')
   const serviceLinksTotal = serviceLinks.reduce((s, l) => s + (l.amount || 0), 0)
 
-  const allTabs = [
-    { key:'stages',      label:'Детали',       icon: cilTask          },
-    { key:'materials',   label:'Материалы',    icon: cilPlus          },
-    { key:'calculation', label:'Смета',        icon: cilCalculator    },
+const allTabs = [
+  { key:'stages',      label:'Детали',        icon: cilTask          },
+  { key:'materials',   label:'Смета материалов', icon: cilPlus       },
+  { key:'calculation', label:'Смета услуг',   icon: cilCalculator    },
     { key:'comments',    label:'Комментарии',  icon: cilCommentSquare },
     { key:'files',       label:'Файлы',        icon: cilFile          },
     { key:'history',     label:'История',      icon: cilHistory       },

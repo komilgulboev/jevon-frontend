@@ -280,23 +280,25 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
     return (q > 0 && p > 0) ? q * m * p : ''
   }
 
-  const recalcDesign = (rows) => {
+  // skipDesignQty=true — не перезаписывать quantity если пользователь
+  // сам его редактирует (иначе автопересчёт из sawing сбивает ввод)
+  const recalcDesign = (rows, skipDesignQty = false) => {
     const designIdx = rows.findIndex(r => r._group === 'design')
     if (designIdx === -1) return rows
     const designRow = rows[designIdx]
-    const hasDrilling = rows.some(r => r.name && r._group === 'drilling')
-    if (hasDrilling) {
-      const next = [...rows]
-      next[designIdx] = { ...designRow, quantity: '', unit_price: 0, total_price: 0, _dirty: true }
-      return next
-    }
+
+    // Убрана старая логика hasDrilling которая обнуляла Чертёж при наличии Присадки.
+    // Теперь Чертёж Базис всегда редактируемый независимо от других строк.
+
     let totalM2 = 0
     rows.forEach(r => {
       if (r._group === 'sawing' && r.name && SHEET_AREA[r.name]) {
         totalM2 += (parseFloat(r.quantity) || 0) * SHEET_AREA[r.name]
       }
     })
-    if (totalM2 > 0) {
+
+    if (totalM2 > 0 && !skipDesignQty) {
+      // Автопересчёт quantity из листов распила
       const next = [...rows]
       const price = parseFloat(designRow.unit_price) || 15
       next[designIdx] = {
@@ -309,6 +311,21 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
       }
       return next
     }
+
+    // Если quantity задан вручную (skipDesignQty) или нет sawing-листов —
+    // просто пересчитываем total_price из текущих quantity и unit_price
+    const q = parseFloat(designRow.quantity)   || 0
+    const p = parseFloat(designRow.unit_price) || 0
+    if (q > 0 && p > 0) {
+      const next = [...rows]
+      next[designIdx] = {
+        ...designRow,
+        total_price: parseFloat((q * p).toFixed(2)),
+        _dirty: true,
+      }
+      return next
+    }
+
     return rows
   }
 
@@ -325,7 +342,10 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
       }
       next[idx] = row
       if (row._group === 'design' && field === 'unit_price') return next
-      return recalcDesign(next)
+      // Если пользователь вручную меняет quantity у строки Чертёж —
+      // не перезаписывать его автопересчётом из sawing-листов
+      const skipDesignQty = row._group === 'design' && field === 'quantity'
+      return recalcDesign(next, skipDesignQty)
     })
   }
 
@@ -342,6 +362,9 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
       }
       if (!isDesign) row.total_price = calcTotal(row.quantity, price, item.unit_spec, item.group_name)
       next[idx] = row
+      // При выборе design из каталога не перезаписываем quantity —
+      // recalcDesign сработает когда изменится quantity в sawing-строках
+      if (isDesign) return next
       return recalcDesign(next)
     })
   }
@@ -374,20 +397,20 @@ export default function EstimateTable({ orderId, order, canEdit = true, canEditP
       await api.post(`/orders/${orderId}/estimate`, { services, materials: [] })
 
       // 2. Синхронизируем detail-estimate для cutting
-      const totalSvcCalc = services.reduce((s, r) => s + ((r.quantity || 0) * (r.unit_price || 0)), 0)
-      if (totalSvcCalc > 0) {
+      // Передаём строки напрямую — бэкенд считает totalPrice как quantity*unit_price
+      // когда width_mm=0 и height_mm=0 (см. CASE в SaveSection)
+      const cuttingRows = services.filter(s => s.name.trim() && s.unit_price > 0)
+      if (cuttingRows.length > 0) {
         await api.post(`/orders/${orderId}/detail-estimate`, {
           service_type: 'cutting',
           settings: {},
-          rows: services
-            .filter(s => s.name.trim() && s.unit_price > 0)
-            .map(s => ({
-              detail_name: s.name,
-              width_mm:    0,
-              height_mm:   0,
-              quantity:    Math.round(parseFloat(s.quantity) || 1),
-              unit_price:  s.unit_price || 0,
-            })),
+          rows: cuttingRows.map(s => ({
+            detail_name: s.name,
+            width_mm:    0,
+            height_mm:   0,
+            quantity:    Math.round(parseFloat(s.quantity) || 1),
+            unit_price:  parseFloat(s.unit_price) || 0,
+          })),
         })
       }
 
