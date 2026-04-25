@@ -16,7 +16,7 @@ import {
   cilArrowLeft, cilHistory,
   cilMoney, cilFile, cilTask, cilCommentSquare,
   cilCalculator, cilPencil, cilPlus, cilLocationPin, cilPeople,
-  cilExternalLink, cilSearch,
+  cilExternalLink, cilSearch, cilPrint,
 } from '@coreui/icons'
 import api from '../../api/client'
 import { useAuth } from '../../AuthContext'
@@ -68,19 +68,32 @@ export default function OrderDetail() {
   const { hasRole } = useAuth()
 
   const STAGE_LABELS = {
-    intake:     'Приём заказа',
-    measure:    'Замер',
-    design:     'Дизайн/Смета',
-    purchase:   'Закупка',
-    production: 'Производство',
-    assembly:   'Сборка',
-    delivery:   'Доставка',
-    handover:   'Сдача клиенту',
-    materials: 'Материалы',
-    payment:   'Оплата',
-    edit:      'Редактирование',
-    estimate:  'Смета',
-    project:   'Проект',
+    intake:      'Приём заказа',
+    measure:     'Замер',
+    design:      'Чертёж/Смета',
+    purchase:    'Закупка',
+    production:  'Производство',
+    assembly:    'Сборка',
+    delivery:    'Доставка',
+    handover:    'Сдача клиенту',
+    material:    'Приём материала',
+    sawing:      'Распил',
+    edging:      'Кромкование',
+    drilling:    'Присадка',
+    packing:     'Упаковка',
+    shipment:    'Отгрузка',
+    sanding:     'Шлифовка',
+    priming:     'Грунтовка',
+    painting:    'Покраска',
+    calculate:   'Расчёт',
+    cnc_work:    'Фрезеровка',
+    assign:      'Назначение мастера',
+    work:        'Работа',
+    materials:   'Материалы',
+    payment:     'Оплата',
+    edit:        'Редактирование',
+    estimate:    'Смета',
+    project:     'Проект',
   }
 
   const PAYMENT_TYPES = {
@@ -144,10 +157,9 @@ export default function OrderDetail() {
 
       setEstimateTotal(detailTotal + svcTotal + matTotal + mTotal)
 
-      // Вычисляем доход для external: услуги − материалы
       const svcSum = detailTotal + svcTotal
-      const expSum = matTotal + mTotal
-      setIncomeTotal(svcSum - expSum)
+      const matSum = matTotal + mTotal
+      setIncomeTotal(svcSum + matSum)
     } catch {}
   }, [id])
 
@@ -220,7 +232,6 @@ export default function OrderDetail() {
     if (activeStage) { loadStageFiles(activeStage); loadAssignees(activeStage) }
   }, [activeStage, loadStageFiles, loadAssignees])
 
-  // Синхронизируем estimated_cost для external заказов с реальным доходом
   useEffect(() => {
     if (!order || order.order_type !== 'external' || incomeTotal <= 0) return
     if (Math.round(incomeTotal) === Math.round(order.estimated_cost || 0)) return
@@ -228,6 +239,193 @@ export default function OrderDetail() {
       .then(() => setOrder(prev => prev ? { ...prev, estimated_cost: Math.round(incomeTotal) } : prev))
       .catch(() => {})
   }, [incomeTotal])
+
+  // ── Общая печать для external ─────────────────────────
+  const printExternalFull = async (orderData) => {
+    try {
+      const [estRes, detailRes, matsRes] = await Promise.all([
+        api.get(`/orders/${id}/estimate`),
+        api.get(`/orders/${id}/detail-estimate`),
+        api.get(`/orders/${id}/materials`),
+      ])
+
+      const svcRows  = estRes.data.services  || []
+      const sections = detailRes.data.data   || []
+      const mats     = matsRes.data.data     || []
+
+      // Строки услуг из estimate (распил старый)
+      const svcFiltered = svcRows.filter(r => r.name?.trim())
+      const svcTrs = svcFiltered.map((r, i) => `
+        <tr>
+          <td class="num">${i + 1}</td>
+          <td class="name">${r.name || ''}</td>
+          <td class="center">${r.height_mm || ''}</td>
+          <td class="center">${r.width_mm  || ''}</td>
+          <td class="center">${r.quantity  || ''}</td>
+          <td class="center">${r.area_m2   ? parseFloat(r.area_m2).toFixed(4) : ''}</td>
+          <td class="right">${r.unit_price  ? Number(r.unit_price).toLocaleString()  : ''}</td>
+          <td class="right bold">${r.total_price ? Math.round(Number(r.total_price)).toLocaleString() : ''}</td>
+        </tr>`).join('')
+      const svcTotal = svcFiltered.reduce((s, r) => s + (parseFloat(r.total_price) || 0), 0)
+
+      // Секции из detail-estimate
+      const SEC_LABELS = { cutting:'Распил', cnc:'ЧПУ', painting:'Покраска', soft:'Мягкая мебель' }
+      let detailHtml = ''
+      let detailTotal = 0
+      for (const sec of sections) {
+        const rows = (sec.rows || []).filter(r => r.detail_name?.trim())
+        if (rows.length === 0) continue
+        const secTotal = rows.reduce((s, r) => s + (parseFloat(r.total_price) || 0), 0)
+        detailTotal += secTotal
+        const trs = rows.map((r, i) => `
+          <tr>
+            <td class="num">${i + 1}</td>
+            <td class="name">${r.detail_name || ''}</td>
+            <td class="center">${r.height_mm || ''}</td>
+            <td class="center">${r.width_mm  || ''}</td>
+            <td class="center">${r.quantity  || ''}</td>
+            <td class="center">${r.area_m2   ? parseFloat(r.area_m2).toFixed(4) : ''}</td>
+            <td class="right">${r.unit_price  ? Number(r.unit_price).toLocaleString()  : ''}</td>
+            <td class="right bold">${r.total_price ? Math.round(Number(r.total_price)).toLocaleString() : ''}</td>
+          </tr>`).join('')
+        detailHtml += `
+          <h2>${SEC_LABELS[sec.service_type] || sec.service_type}</h2>
+          <table><thead><tr>
+            <th style="width:8mm">№</th><th>Наименование</th>
+            <th style="width:18mm">Высота мм</th><th style="width:18mm">Ширина мм</th>
+            <th style="width:14mm">Кол-во</th><th style="width:16mm">м²</th>
+            <th style="width:20mm">Цена/м²</th><th style="width:22mm">Сумма</th>
+          </tr></thead><tbody>
+            ${trs}
+            <tr class="total-row">
+              <td colspan="7" style="text-align:right">Итого ${SEC_LABELS[sec.service_type] || sec.service_type}:</td>
+              <td class="right">${secTotal > 0 ? Math.round(secTotal).toLocaleString() + ' сом.' : ''}</td>
+            </tr>
+          </tbody></table>`
+      }
+
+      // Материалы
+      const filledMats = mats.filter(m => m.name?.trim())
+      const matTrs = filledMats.map((m, i) => `
+        <tr>
+          <td class="num">${i + 1}</td>
+          <td class="name">${m.name || ''}</td>
+          <td class="center">${m.quantity || ''} ${m.unit || ''}</td>
+          <td class="right">${m.unit_price  ? Number(m.unit_price).toLocaleString()  : ''}</td>
+          <td class="right bold">${m.total_price ? Number(m.total_price).toLocaleString() : ''}</td>
+        </tr>`).join('')
+      const matTotal = filledMats.reduce((s, m) => s + (parseFloat(m.total_price) || 0), 0)
+
+      const grandTotal = svcTotal + detailTotal + matTotal
+
+      const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Смета заказа ${orderData.order_number || ''}</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:Arial,sans-serif; font-size:10pt; color:#000; background:#fff; }
+.page { width:210mm; margin:0 auto; padding:8mm; }
+.header { text-align:center; border:2px solid #000; padding:4mm; margin-bottom:4mm; }
+.header h1 { font-size:14pt; font-weight:bold; }
+.header p  { font-size:9pt; }
+.info-grid { display:grid; grid-template-columns:1fr 1fr; gap:2mm; margin-bottom:4mm; font-size:9pt; }
+.info-grid .cell { border:1px solid #000; padding:1.5mm 3mm; }
+.info-grid .label { font-weight:bold; }
+h2 { font-size:10pt; font-weight:bold; text-align:center; border:1px solid #000;
+     border-bottom:none; padding:2mm; background:#f0f0f0; margin-top:5mm;
+     -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+table { width:100%; border-collapse:collapse; margin-bottom:4mm; }
+th,td { border:1px solid #000; padding:1.5mm 2mm; font-size:9pt; }
+th { background:#e0e0e0 !important; text-align:center; font-weight:bold;
+     -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+td.num   { text-align:center; width:8mm; }
+td.name  { text-align:left; }
+td.center{ text-align:center; }
+td.right { text-align:right; }
+td.bold  { font-weight:bold; }
+tr:nth-child(even) { background:#fafafa !important;
+  -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+.total-row td { font-weight:bold; background:#e8e8e8 !important;
+  border-top:2px solid #000 !important;
+  -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+.grand-total { margin-top:5mm; padding:3mm 0; border-top:2px solid #000;
+  text-align:right; font-size:12pt; font-weight:bold; }
+.sign { margin-top:8mm; display:flex; justify-content:space-between; font-size:9pt; }
+.print-btn { display:block; width:210mm; margin:10px auto; padding:10px;
+  background:#1a73e8; color:white; border:none; border-radius:6px;
+  font-size:14px; cursor:pointer; }
+@media screen {
+  body { background:#888; padding:10px 0 30px; }
+  .page { background:#fff; box-shadow:0 3px 20px rgba(0,0,0,0.4); min-height:297mm; }
+}
+@media print {
+  @page { size:A4 portrait; margin:0; }
+  body { background:#fff; padding:0; }
+  .page { padding:8mm; box-shadow:none; min-height:auto; }
+  .print-btn { display:none; }
+}
+</style></head><body>
+<button class="print-btn" onclick="window.print()">🖨️ Распечатать</button>
+<div class="page">
+  <div class="header">
+    <h1>JEVON</h1>
+    <p>Смета — Заказ вне цеха</p>
+  </div>
+  <div class="info-grid">
+    <div class="cell"><span class="label">Номер заказа:</span> ${orderData.order_number || '—'}</div>
+    <div class="cell"><span class="label">Дата:</span> ${new Date().toLocaleDateString('ru-RU')}</div>
+    <div class="cell"><span class="label">Клиент:</span> ${orderData.client_name || '—'}${orderData.client_phone ? ' / ' + orderData.client_phone : ''}</div>
+    <div class="cell"><span class="label">Адрес:</span> ${orderData.address || '—'}</div>
+  </div>
+
+  ${svcTrs ? `
+  <h2>Смета услуг — Распил</h2>
+  <table><thead><tr>
+    <th style="width:8mm">№</th><th>Наименование</th>
+    <th style="width:18mm">Высота мм</th><th style="width:18mm">Ширина мм</th>
+    <th style="width:14mm">Кол-во</th><th style="width:16mm">м²</th>
+    <th style="width:20mm">Цена/м²</th><th style="width:22mm">Сумма</th>
+  </tr></thead><tbody>
+    ${svcTrs}
+    <tr class="total-row">
+      <td colspan="7" style="text-align:right">Итого Распил:</td>
+      <td class="right">${svcTotal > 0 ? Math.round(svcTotal).toLocaleString() + ' сом.' : ''}</td>
+    </tr>
+  </tbody></table>` : ''}
+
+  ${detailHtml}
+
+  ${matTrs ? `
+  <h2>Смета материалов</h2>
+  <table><thead><tr>
+    <th style="width:8mm">№</th><th>Наименование</th>
+    <th style="width:24mm">Кол-во</th><th style="width:24mm">Цена</th>
+    <th style="width:26mm">Сумма</th>
+  </tr></thead><tbody>
+    ${matTrs}
+    <tr class="total-row">
+      <td colspan="4" style="text-align:right">Итого материалы:</td>
+      <td class="right">${matTotal > 0 ? Math.round(matTotal).toLocaleString() + ' сом.' : ''}</td>
+    </tr>
+  </tbody></table>` : ''}
+
+  <div class="grand-total">
+    Итого к оплате: ${grandTotal > 0 ? Math.round(grandTotal).toLocaleString() + ' сом.' : '—'}
+  </div>
+  <div class="sign">
+    <span>Исполнитель: _______________________</span>
+    <span>Клиент: _______________________</span>
+  </div>
+</div></body></html>`
+
+      const w = window.open('', '_blank')
+      w.document.write(html)
+      w.document.close()
+      w.focus()
+    } catch {
+      setError('Ошибка формирования печати')
+    }
+  }
 
   const openAssignModal = () => {
     setSelectedUsers(assignees.map(a => a.user_id)); setAssignSearch(''); setAssignModal(true)
@@ -299,15 +497,15 @@ export default function OrderDetail() {
   const canManage         = hasRole('admin', 'supervisor', 'manager')
   const serviceLinksTotal = serviceLinks.reduce((s, l) => s + (l.amount || 0), 0)
 
-const allTabs = [
-  { key:'stages',      label:'Детали',        icon: cilTask          },
-  { key:'materials',   label:'Смета материалов', icon: cilPlus       },
-  { key:'calculation', label:'Смета услуг',   icon: cilCalculator    },
-    { key:'comments',    label:'Комментарии',  icon: cilCommentSquare },
-    { key:'files',       label:'Файлы',        icon: cilFile          },
-    { key:'history',     label:'История',      icon: cilHistory       },
-    { key:'expenses',    label:'Расходы',      icon: cilMoney, workshopOnly: true },
-    { key:'payments',    label:'Оплата',       icon: cilMoney         },
+  const allTabs = [
+    { key:'stages',      label:'Детали',           icon: cilTask          },
+    { key:'materials',   label:'Смета материалов',  icon: cilPlus          },
+    { key:'calculation', label:'Смета услуг',        icon: cilCalculator    },
+    { key:'comments',    label:'Комментарии',        icon: cilCommentSquare },
+    { key:'files',       label:'Файлы',              icon: cilFile          },
+    { key:'history',     label:'История',            icon: cilHistory       },
+    { key:'expenses',    label:'Расходы',            icon: cilMoney, workshopOnly: true },
+    { key:'payments',    label:'Оплата',             icon: cilMoney         },
   ]
 
   const tabs = allTabs.filter(tab => {
@@ -366,6 +564,14 @@ const allTabs = [
               {ORDER_TYPE_LABELS[order.order_type] || order.order_type}
             </CBadge>
             <h5 className="mb-0">{order.title}</h5>
+
+            {/* Кнопка общей печати для external */}
+            {isExternal && canManage && (
+              <CButton size="sm" color="success" variant="outline" onClick={() => printExternalFull(order)}>
+                <CIcon icon={cilPrint} className="me-1" />Общая печать
+              </CButton>
+            )}
+
             {canManage && (
               <CButton size="sm" color="secondary" variant="ghost"
                 onClick={() => {
@@ -492,10 +698,10 @@ const allTabs = [
                   <hr />
                   <CRow className="g-2 small">
                     {[
-                      { label:'Тип',      value: ORDER_TYPE_LABELS[order.order_type] || order.order_type },
+                      { label:'Тип',       value: ORDER_TYPE_LABELS[order.order_type] || order.order_type },
                       { label:'Приоритет', value: t(`order_detail.priority_${order.priority}`, { defaultValue: order.priority }) },
-                      { label:'Статус',   value: t(`order_detail.status_${order.status}`, { defaultValue: order.status }) },
-                      { label:'Создан',   value: new Date(order.created_at).toLocaleDateString() },
+                      { label:'Статус',    value: t(`order_detail.status_${order.status}`, { defaultValue: order.status }) },
+                      { label:'Создан',    value: new Date(order.created_at).toLocaleDateString() },
                     ].filter(f => f.value).map(f => (
                       <CCol xs={6} key={f.label}>
                         <span className="text-body-secondary">{f.label}: </span>
@@ -602,11 +808,8 @@ const allTabs = [
               {activeTab === 'payments' && (
                 <div>
                   <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
-
-                    {/* Левая часть — разбивка */}
                     <div className="d-flex flex-wrap gap-3">
 
-                      {/* Распил из старой сметы */}
                       {estimateSums.services > 0 && (
                         <div>
                           <div className="small text-body-secondary">Распил</div>
@@ -616,7 +819,6 @@ const allTabs = [
                         </div>
                       )}
 
-                      {/* Разделы из detail-estimate */}
                       {estimateSections.filter(sec => sec.total_price > 0).map(sec => {
                         const SEC_LABELS = { cutting:'Распил', cnc:'ЧПУ', painting:'Покраска', soft:'Мягкая мебель' }
                         return (
@@ -629,58 +831,54 @@ const allTabs = [
                         )
                       })}
 
-                      {/* Материалы из сметы — всегда расход */}
                       {estimateSums.materials > 0 && (
                         <div>
                           <div className="small text-body-secondary">Материалы (смета)</div>
-                          <div className="fw-bold text-danger">
-                            −{Math.round(estimateSums.materials).toLocaleString()} сом.
+                          <div className={`fw-bold ${isExternal ? 'text-success' : 'text-danger'}`}>
+                            {isExternal ? '+' : '−'}{Math.round(estimateSums.materials).toLocaleString()} сом.
                           </div>
                         </div>
                       )}
 
-                      {/* Материалы из вкладки — всегда расход */}
                       {materialsTotal > 0 && (
                         <div>
                           <div className="small text-body-secondary">Материалы</div>
-                          <div className="fw-bold text-danger">
-                            −{Math.round(materialsTotal).toLocaleString()} сом.
+                          <div className={`fw-bold ${isExternal ? 'text-success' : 'text-danger'}`}>
+                            {isExternal ? '+' : '−'}{Math.round(materialsTotal).toLocaleString()} сом.
                           </div>
                         </div>
                       )}
 
-                      {/* workshop: Сумма договора + Оплачено + Остаток / Доход */}
                       {isWorkshop && (() => {
-                          const paidAmount = order.paid_amount || 0
-                          const isPaid = debt <= 0 && paidAmount > 0
-                          const workshopIncome = isPaid ? cost - estimateTotal : null
-                          return (
-                            <>
-                              <div style={{ borderLeft:'1px solid var(--cui-border-color)', paddingLeft:12 }}>
-                                <div className="small text-body-secondary">Сумма договора</div>
-                                <div className="fw-bold">{cost.toLocaleString()} сом.</div>
+                        const paidAmount = order.paid_amount || 0
+                        const isPaid = debt <= 0 && paidAmount > 0
+                        return (
+                          <>
+                            <div style={{ borderLeft:'1px solid var(--cui-border-color)', paddingLeft:12 }}>
+                              <div className="small text-body-secondary">Сумма договора</div>
+                              <div className="fw-bold">{cost.toLocaleString()} сом.</div>
+                            </div>
+                            {estimateTotal > 0 && (
+                              <div>
+                                <div className="small text-body-secondary">Расход</div>
+                                <div className="fw-bold text-danger">−{Math.round(estimateTotal).toLocaleString()} сом.</div>
                               </div>
-{estimateTotal > 0 && (
-        <div>
-          <div className="small text-body-secondary">Расход</div>
-          <div className="fw-bold text-danger">−{Math.round(estimateTotal).toLocaleString()} сом.</div>
-        </div>
-      )}
-      {cost > 0 && estimateTotal > 0 && (
-        <div>
-          <div className="small text-body-secondary">Доход</div>
-          {(() => {
-            const income = cost - estimateTotal
-            return (
-              <div className={`fw-bold ${income >= 0 ? 'text-success' : 'text-danger'}`}>
-                {income >= 0 ? '+' : ''}{Math.round(income).toLocaleString()} сом.
-              </div>
-            )
-          })()}
-        </div>
-      )}
-      <div>
-        <div className="small text-body-secondary">Оплачено</div>
+                            )}
+                            {cost > 0 && estimateTotal > 0 && (
+                              <div>
+                                <div className="small text-body-secondary">Доход</div>
+                                {(() => {
+                                  const income = cost - estimateTotal
+                                  return (
+                                    <div className={`fw-bold ${income >= 0 ? 'text-success' : 'text-danger'}`}>
+                                      {income >= 0 ? '+' : ''}{Math.round(income).toLocaleString()} сом.
+                                    </div>
+                                  )
+                                })()}
+                              </div>
+                            )}
+                            <div>
+                              <div className="small text-body-secondary">Оплачено</div>
                               <div className="fw-bold text-success">{paidAmount.toLocaleString()} сом.</div>
                             </div>
                             {debt > 0 && (
@@ -689,19 +887,10 @@ const allTabs = [
                                 <div className="fw-bold text-danger">{debt.toLocaleString()} сом.</div>
                               </div>
                             )}
-                            {isPaid && workshopIncome !== null && (
-                              <div>
-                                <div className="small text-body-secondary">Доход</div>
-                                <div className={`fw-bold ${workshopIncome >= 0 ? 'text-success' : 'text-danger'}`}>
-                                  {workshopIncome >= 0 ? '+' : ''}{Math.round(workshopIncome).toLocaleString()} сом.
-                                </div>
-                              </div>
-                            )}
                           </>
                         )
                       })()}
 
-                      {/* external: К оплате + Оплачено + Доход + Остаток */}
                       {isExternal && (
                         <>
                           <div style={{ borderLeft:'1px solid var(--cui-border-color)', paddingLeft:12 }}>
@@ -730,34 +919,19 @@ const allTabs = [
                       )}
                     </div>
 
-                    {/* Правый угол — итог + кнопка */}
                     <div className="d-flex flex-column align-items-end gap-2">
-                      {/* workshop: показываем итого расход из сметы */}
                       {isWorkshop && estimateTotal > 0 && (
                         <div className="p-2 rounded text-end"
-                          style={{
-                            background: 'var(--cui-danger-bg-subtle)',
-                            border: '1px solid var(--cui-danger-border-subtle)',
-                            minWidth: 170,
-                          }}>
+                          style={{ background:'var(--cui-danger-bg-subtle)', border:'1px solid var(--cui-danger-border-subtle)', minWidth:170 }}>
                           <div className="small text-body-secondary">Итого расход (смета)</div>
-                          <div className="fw-bold fs-5 text-danger">
-                            −{Math.round(estimateTotal).toLocaleString()} сом.
-                          </div>
+                          <div className="fw-bold fs-5 text-danger">−{Math.round(estimateTotal).toLocaleString()} сом.</div>
                         </div>
                       )}
-                      {/* external: показываем итого приход (доход) */}
                       {isExternal && incomeTotal > 0 && (
                         <div className="p-2 rounded text-end"
-                          style={{
-                            background: 'var(--cui-success-bg-subtle)',
-                            border: '1px solid var(--cui-success-border-subtle)',
-                            minWidth: 170,
-                          }}>
+                          style={{ background:'var(--cui-success-bg-subtle)', border:'1px solid var(--cui-success-border-subtle)', minWidth:170 }}>
                           <div className="small text-body-secondary">Итого приход (смета)</div>
-                          <div className="fw-bold fs-5 text-success">
-                            +{Math.round(incomeTotal).toLocaleString()} сом.
-                          </div>
+                          <div className="fw-bold fs-5 text-success">+{Math.round(incomeTotal).toLocaleString()} сом.</div>
                         </div>
                       )}
                       {canManage && (

@@ -81,6 +81,7 @@ const _nav = [
   items: [
     { component: CNavItem, name: 'Общий отчёт',  to: '/reports'        },
     { component: CNavItem, name: 'Доходность',   to: '/reports/profit' },
+     { component: CNavItem, name: 'Отчёт по складу', to: '/reports/warehouse'  },
   ],
 },
 

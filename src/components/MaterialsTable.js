@@ -23,7 +23,7 @@ const emptyRow = () => ({
   total_price: '',
   supplier:    '',
   stage_name:  '',
-  item_id:     '', // ссылка на warehouse_items
+  item_id:     '',
   _dirty:      false,
   _saved:      false,
 })
@@ -39,13 +39,6 @@ function printInvoice(order, rows, total) {
       <td class="center">${r.quantity !== '' ? r.quantity : ''} ${r.unit}</td>
       <td class="right">${r.unit_price !== '' ? Number(r.unit_price).toLocaleString() : ''}</td>
       <td class="right bold">${r.total_price !== '' ? Number(r.total_price).toLocaleString() : ''}</td>
-    </tr>`).join('')
-  const emptyCount = Math.max(0, 28 - filled.length)
-  const emptyTrs = Array.from({ length: emptyCount }, (_, i) => `
-    <tr>
-      <td class="num">${filled.length + i + 1}</td>
-      <td class="name">&nbsp;</td>
-      <td></td><td></td><td></td>
     </tr>`).join('')
 
   const html = `<!DOCTYPE html>
@@ -81,7 +74,7 @@ ${order?.address ? `<p><b>Адрес:</b> ${order.address}</p>` : ''}
 <table><thead><tr>
 <th style="width:8mm">№</th><th>Наименование</th><th style="width:20mm">Кол-во</th><th style="width:22mm">Цена</th><th style="width:24mm">Сумма</th>
 </tr></thead><tbody>
-${filledTrs}${emptyTrs}
+${filledTrs}
 <tr class="total-row"><td colspan="4" style="text-align:right">Итого:</td><td class="right">${total > 0 ? Number(total).toLocaleString() + ' сом.' : ''}</td></tr>
 </tbody></table>
 <div class="sign"><span>Снабженец: ______________________</span><span>Принял: ______________________</span></div>
@@ -144,13 +137,11 @@ export default function MaterialsTable({ orderId, order, stageName, canEdit = tr
   const [success,     setSuccess]     = useState(false)
   const [isMobile,    setIsMobile]    = useState(window.innerWidth < 768)
 
-  // Модал выбора из склада
   const [warehouseModal,   setWarehouseModal]   = useState(false)
   const [warehouseItems,   setWarehouseItems]   = useState([])
   const [warehouseSearch,  setWarehouseSearch]  = useState('')
   const [warehouseLoading, setWarehouseLoading] = useState(false)
 
-  // Модал заявки
   const [invoiceModal,   setInvoiceModal]   = useState(false)
   const [invoiceItems,   setInvoiceItems]   = useState([])
   const [invoiceSaving,  setInvoiceSaving]  = useState(false)
@@ -194,8 +185,6 @@ export default function MaterialsTable({ orderId, order, stageName, canEdit = tr
 
   useEffect(() => { loadMaterials() }, [loadMaterials])
 
-  // ── Выбор из склада ────────────────────────────────────
-
   const openWarehouseModal = async () => {
     setWarehouseModal(true)
     setWarehouseSearch('')
@@ -208,41 +197,38 @@ export default function MaterialsTable({ orderId, order, stageName, canEdit = tr
     }
   }
 
-const addFromWarehouse = (item) => {
-  setRows(prev => {
-    const emptyIdx = prev.findIndex(r => !r.name.trim())
-    const price = item.sale_price > 0 ? item.sale_price : ''
-    const qty   = 1
-    const newRow = {
-      ...emptyRow(),
-      name:        item.name,
-      unit:        item.unit || 'шт',
-      unit_price:  price,
-      quantity:    qty,
-      total_price: price ? qty * price : '',
-      item_id:     item.id,
-      _dirty:      true,
-    }
-    if (emptyIdx !== -1) {
-      const next = [...prev]
-      next[emptyIdx] = newRow
-      return next
-    }
-    return [...prev, newRow]
-  })
-  setWarehouseModal(false)
-}
+  const addFromWarehouse = (item) => {
+    setRows(prev => {
+      const emptyIdx = prev.findIndex(r => !r.name.trim())
+      const price = item.sale_price > 0 ? item.sale_price : ''
+      const qty   = 1
+      const newRow = {
+        ...emptyRow(),
+        name:        item.name,
+        unit:        item.unit || 'шт',
+        unit_price:  price,
+        quantity:    qty,
+        total_price: price ? qty * price : '',
+        item_id:     item.id,
+        _dirty:      true,
+      }
+      if (emptyIdx !== -1) {
+        const next = [...prev]
+        next[emptyIdx] = newRow
+        return next
+      }
+      return [...prev, newRow]
+    })
+    setWarehouseModal(false)
+  }
 
   const filteredWarehouse = warehouseItems.filter(i => {
     const q = warehouseSearch.toLowerCase()
     return !q || i.name?.toLowerCase().includes(q) || i.category?.toLowerCase().includes(q) || i.article?.toLowerCase().includes(q)
   })
 
-  // ── Создание заявки ────────────────────────────────────
-
   const openInvoiceModal = () => {
     const filledRows = rows.filter(r => r.name.trim() && r.item_id)
-    // Группируем по item_id
     const grouped = {}
     for (const row of filledRows) {
       if (!grouped[row.item_id]) {
@@ -291,8 +277,6 @@ const addFromWarehouse = (item) => {
       setInvoiceSaving(false)
     }
   }
-
-  // ── Обновление строк ───────────────────────────────────
 
   const updateRow = (idx, field, value) => {
     setRows(prev => {
@@ -359,8 +343,8 @@ const addFromWarehouse = (item) => {
     }
   }
 
-  const total       = rows.reduce((sum, r) => sum + (parseFloat(r.total_price) || 0), 0)
-  const filledCount = rows.filter(r => r.name.trim()).length
+  const total             = rows.reduce((sum, r) => sum + (parseFloat(r.total_price) || 0), 0)
+  const filledCount       = rows.filter(r => r.name.trim()).length
   const hasWarehouseItems = rows.some(r => r.name.trim() && r.item_id)
 
   const cellStyle  = { border: '1px solid var(--cui-border-color)', padding: 0 }
