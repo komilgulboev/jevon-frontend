@@ -133,7 +133,8 @@ export default function OrderDetail() {
   const [estimateSections,  setEstimateSections]  = useState([])
   const [incomeTotal,       setIncomeTotal]       = useState(0)
 
-  const loadEstimateSums = useCallback(async () => {
+  // syncExternal=true → патчим estimated_cost для external заказов (только при сохранении сметы)
+  const loadEstimateSums = useCallback(async (syncExternal = false, currentOrder = null) => {
     try {
       const detailRes = await api.get(`/orders/${id}/detail-estimate`)
       const sections = detailRes.data.data || []
@@ -159,7 +160,18 @@ export default function OrderDetail() {
 
       const svcSum = detailTotal + svcTotal
       const matSum = matTotal + mTotal
-      setIncomeTotal(svcSum + matSum)
+      const newIncomeTotal = svcSum + matSum
+      setIncomeTotal(newIncomeTotal)
+
+      // Обновляем estimated_cost только явно при сохранении сметы для external
+      const ord = currentOrder
+      if (syncExternal && ord?.order_type === 'external' && newIncomeTotal > 0) {
+        if (Math.round(newIncomeTotal) !== Math.round(ord.estimated_cost || 0)) {
+          await api.patch(`/orders/${id}`, { estimated_cost: Math.round(newIncomeTotal) })
+          setOrder(prev => prev ? { ...prev, estimated_cost: Math.round(newIncomeTotal) } : prev)
+        }
+      }
+      console.log('loadEstimateSums called', { syncExternal, orderType: currentOrder?.order_type, newIncomeTotal })
     } catch {}
   }, [id])
 
@@ -202,10 +214,10 @@ export default function OrderDetail() {
       if (tab === 'payments') {
         const r = await api.get(`/orders/${id}/payments`)
         setPayments(r.data.data || [])
-        await loadEstimateSums()
+        await loadEstimateSums(false)
       }
       if (tab === 'calculation' || tab === 'expenses' || tab === 'materials') {
-        await loadEstimateSums()
+        await loadEstimateSums(false)
       }
       if (tab === 'comments') {
         const r = await api.get(`/orders/${id}/comments`)
@@ -232,14 +244,6 @@ export default function OrderDetail() {
     if (activeStage) { loadStageFiles(activeStage); loadAssignees(activeStage) }
   }, [activeStage, loadStageFiles, loadAssignees])
 
-  useEffect(() => {
-    if (!order || order.order_type !== 'external' || incomeTotal <= 0) return
-    if (Math.round(incomeTotal) === Math.round(order.estimated_cost || 0)) return
-    api.patch(`/orders/${id}`, { estimated_cost: Math.round(incomeTotal) })
-      .then(() => setOrder(prev => prev ? { ...prev, estimated_cost: Math.round(incomeTotal) } : prev))
-      .catch(() => {})
-  }, [incomeTotal])
-
   // ── Общая печать для external ─────────────────────────
   const printExternalFull = async (orderData) => {
     try {
@@ -253,7 +257,6 @@ export default function OrderDetail() {
       const sections = detailRes.data.data   || []
       const mats     = matsRes.data.data     || []
 
-      // Строки услуг из estimate (распил старый)
       const svcFiltered = svcRows.filter(r => r.name?.trim())
       const svcTrs = svcFiltered.map((r, i) => `
         <tr>
@@ -268,7 +271,6 @@ export default function OrderDetail() {
         </tr>`).join('')
       const svcTotal = svcFiltered.reduce((s, r) => s + (parseFloat(r.total_price) || 0), 0)
 
-      // Секции из detail-estimate
       const SEC_LABELS = { cutting:'Распил', cnc:'ЧПУ', painting:'Покраска', soft:'Мягкая мебель' }
       let detailHtml = ''
       let detailTotal = 0
@@ -304,7 +306,6 @@ export default function OrderDetail() {
           </tbody></table>`
       }
 
-      // Материалы
       const filledMats = mats.filter(m => m.name?.trim())
       const matTrs = filledMats.map((m, i) => `
         <tr>
@@ -454,7 +455,8 @@ tr:nth-child(even) { background:#fafafa !important;
     try {
       await api.post(`/orders/${id}/payments`, { ...payForm, amount: parseFloat(payForm.amount) })
       setPayModal(false); setPayForm({ amount:'', payment_type:'cash', notes:'' })
-      loadTabData('payments'); loadOrder()
+      await loadTabData('payments')
+      await loadOrder()
     } catch { setError('Ошибка оплаты') }
     finally { setSaving(false) }
   }
@@ -565,7 +567,6 @@ tr:nth-child(even) { background:#fafafa !important;
             </CBadge>
             <h5 className="mb-0">{order.title}</h5>
 
-            {/* Кнопка общей печати для external */}
             {isExternal && canManage && (
               <CButton size="sm" color="success" variant="outline" onClick={() => printExternalFull(order)}>
                 <CIcon icon={cilPrint} className="me-1" />Общая печать
@@ -791,7 +792,7 @@ tr:nth-child(even) { background:#fafafa !important;
                   order={order}
                   stageName={STAGE_LABELS[currentStage?.stage]||''}
                   canEdit={hasRole('admin','supervisor','manager','master','cutter')}
-                  onSaved={() => loadEstimateSums()}
+                  onSaved={() => loadEstimateSums(false)}
                 />
               )}
 
@@ -800,7 +801,10 @@ tr:nth-child(even) { background:#fafafa !important;
                 <DetailEstimateTable orderId={id} order={order} payments={payments}
                   canEdit={hasRole('admin','supervisor','manager','master','cutter')}
                   canEditPrice={hasRole('admin','supervisor')}
-                  onSaved={() => { setEstimateStagesKey(k => k+1); loadEstimateSums() }}
+                  onSaved={() => {
+                    setEstimateStagesKey(k => k+1)
+                    loadEstimateSums(true, order)  // ← sync estimated_cost для external
+                  }}
                 />
               )}
 
@@ -851,7 +855,6 @@ tr:nth-child(even) { background:#fafafa !important;
 
                       {isWorkshop && (() => {
                         const paidAmount = order.paid_amount || 0
-                        const isPaid = debt <= 0 && paidAmount > 0
                         return (
                           <>
                             <div style={{ borderLeft:'1px solid var(--cui-border-color)', paddingLeft:12 }}>
